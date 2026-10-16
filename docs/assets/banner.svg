@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-labelledby="t d">
+  <title id="t">SinalPlus</title>
+  <desc id="d">Gamificação white-label para provedores de internet: feedback de pós-venda vira pontos, níveis e prêmios.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#132a4a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.18" cy="0.55" r="0.5">
+      <stop offset="0" stop-color="#22c55e" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#22c55e" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#ffffff" stroke-opacity="0.04"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="320" rx="20" fill="url(#bg)"/>
+  <rect width="1280" height="320" rx="20" fill="url(#grid)"/>
+  <rect width="1280" height="320" rx="20" fill="url(#glow)"/>
+
+  <!-- barras de sinal: 1 (fraco, vermelho) a 5 (forte, verde) -->
+  <g transform="translate(110 240)">
+    <rect x="0"   y="-40"  width="34" height="40"  rx="6" fill="#ef4444"/>
+    <rect x="48"  y="-75"  width="34" height="75"  rx="6" fill="#f97316"/>
+    <rect x="96"  y="-110" width="34" height="110" rx="6" fill="#eab308"/>
+    <rect x="144" y="-145" width="34" height="145" rx="6" fill="#84cc16"/>
+    <rect x="192" y="-180" width="34" height="180" rx="6" fill="#22c55e"/>
+  </g>
+
+  <g font-family="'Segoe UI', Inter, Roboto, 'Helvetica Neue', Arial, sans-serif">
+    <text x="400" y="150" font-size="76" font-weight="800" fill="#f8fafc" letter-spacing="-1">Sinal<tspan fill="#22c55e">Plus</tspan></text>
+    <text x="404" y="200" font-size="26" fill="#cbd5e1">Gamificação white-label para provedores de internet</text>
+    <text x="404" y="240" font-size="20" fill="#94a3b8">Feedback de pós-venda → pontos → níveis → prêmios · integração IXC e SGP</text>
+  </g>
+</svg>
