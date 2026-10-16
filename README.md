@@ -3,7 +3,8 @@
 </p>
 
 <p align="center">
-  <img alt="Status: Fase 0" src="https://img.shields.io/badge/status-fase%200%20%C2%B7%20funda%C3%A7%C3%A3o-f59e0b?style=flat-square">
+  <a href="https://github.com/nicholasrichardsonsecurity/GamificacaoTelecom/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/nicholasrichardsonsecurity/GamificacaoTelecom/ci.yml?branch=main&style=flat-square&label=CI"></a>
+  <img alt="Status: Fase 1" src="https://img.shields.io/badge/status-fase%201%20%C2%B7%20MVP-f59e0b?style=flat-square">
   <img alt="Multi-tenant" src="https://img.shields.io/badge/multi--tenant-white--label-22c55e?style=flat-square">
   <img alt="Integrações" src="https://img.shields.io/badge/integra%C3%A7%C3%B5es-IXC%20%7C%20SGP-0ea5e9?style=flat-square">
   <img alt="Idioma" src="https://img.shields.io/badge/idioma-pt--BR-009c3b?style=flat-square">
@@ -113,12 +114,91 @@ flowchart LR
   por `idExternoERP`.
 - **Credenciais de ERP criptografadas** em repouso.
 
+## Como rodar localmente
+
+Pré-requisitos: **Node.js 22+** e **PostgreSQL 16**. Redis só será necessário a
+partir da Fase 2 (filas BullMQ).
+
+```bash
+# 1. Banco de desenvolvimento
+sudo -u postgres psql -c "CREATE USER sinalplus WITH PASSWORD 'sinalplus' CREATEDB;"
+sudo -u postgres psql -c "CREATE DATABASE sinalplus OWNER sinalplus;"
+
+# 2. Dependências e variáveis de ambiente
+npm install
+cp .env.example .env   # preencha AUTH_SECRET e CREDENCIAIS_CHAVE (openssl rand -base64 32)
+
+# 3. Migrations e dados de exemplo
+npm run db:migrate
+npm run db:seed
+
+# 4. Servidor de desenvolvimento
+npm run dev
+```
+
+Com `PLATAFORMA_DOMINIO="localhost"`, cada provedor fica em um subdomínio de
+`localhost`, que os navegadores já resolvem para a sua máquina:
+
+| Endereço | O que é | Login de exemplo |
+|---|---|---|
+| http://localhost:3000 | Plataforma (Super Admin) | `admin@sinalplus.local` |
+| http://demo.localhost:3000 | Provedor de demonstração "Clube Fibra+" | `admin@demo.local`, `gestor@demo.local`, `colaborador@demo.local` |
+
+A senha de todos os usuários de exemplo é `sinalplus123` (mude com `SEED_SENHA`).
+
+### Scripts
+
+| Comando | Faz |
+|---|---|
+| `npm run dev` | Servidor de desenvolvimento |
+| `npm run build` / `npm start` | Build e servidor de produção |
+| `npm run lint` / `npm run typecheck` | ESLint e checagem de tipos |
+| `npm test` | Testes (Vitest). Os de isolamento no banco rodam com `TEST_DATABASE_URL` apontando para um banco descartável |
+| `npm run db:migrate` | Cria e aplica migrations em desenvolvimento |
+| `npm run db:deploy` | Aplica migrations em produção |
+| `npm run db:seed` | Planos, Super Admin e provedor de demonstração |
+
+### Estrutura
+
+```
+prisma/
+├── schema.prisma          # modelo de dados (docs/03-MODELO-DADOS.md)
+├── migrations/            # inclui CHECKs, índices parciais e o trigger do ledger
+└── seed.ts
+src/
+├── app/
+│   ├── (auth)/login/      # login com a marca do provedor
+│   ├── (app)/             # área logada: superadmin, admin, gestor, colaborador
+│   └── api/auth/          # Auth.js
+├── auth.ts / auth.config.ts
+├── middleware.ts          # resolução de host + RBAC por área
+├── components/            # shadcn/ui e o ícone de sinal
+└── lib/
+    ├── host.ts            # subdomínio ou domínio próprio → tenant
+    ├── tenant.ts          # busca do tenant e branding
+    ├── tenant-db.ts       # Prisma escopado por tenant (isolamento)
+    ├── rbac.ts            # papéis e áreas
+    ├── branding.ts        # cores da marca sanitizadas e contraste
+    └── crypto.ts          # credenciais de IXC/SGP cifradas (AES-256-GCM)
+```
+
+### Garantias da Fase 0
+
+- **Isolamento por tenant**: `dbDoTenant(tenantId)` injeta o tenant em toda
+  leitura e escrita e recusa gravar em outro tenant; testado contra um Postgres real.
+- **Login por domínio**: o e-mail é único por provedor, então o tenant vem do
+  domínio acessado. Na plataforma só entra `SUPER_ADMIN`.
+- **Ledger imutável no banco**: um trigger bloqueia `UPDATE` e `DELETE` em
+  `TransacaoPontos`.
+- **White-label sem marca fixa**: nome, logo, favicon e cores vêm do `Tenant`;
+  cores passam por validação antes de virarem CSS.
+
 ## Roadmap
 
 | Fase | Entrega | Status |
 |:---:|---|:---:|
-| 0 | Fundação técnica: Next.js, Prisma, schema com white-label, Auth.js + RBAC, resolução de tenant | 🚧 |
-| 1 | Núcleo de negócio (MVP): tenants, branding, usuários, regras, avaliação por sinal, motor de pontuação, ranking | ⏳ |
+| 0 | Fundação técnica: Next.js, Prisma, schema com white-label, Auth.js + RBAC, resolução de tenant | ✅ |
+| 1 | Núcleo de negócio (MVP): tenants, branding, usuários, regras, avaliação por sinal, motor de pontuação, ranking | 🚧 |
 | 2 | Conectores de ERP IXC e SGP: sincronização periódica e webhooks | ⏳ |
 | 3 | Prêmios e resgate com fotos, aprovação e baixa de estoque | ⏳ |
 | 4 | Notificações (WhatsApp, e-mail, SMS) e campanhas de pontos | ⏳ |

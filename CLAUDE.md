@@ -63,16 +63,27 @@ avançada.
 ## Ordem de implementação sugerida (roadmap de fases)
 
 ### Fase 0 — Fundação técnica (já com white-label no schema)
-- [ ] Inicializar projeto Next.js 15 + TypeScript + Tailwind + shadcn/ui.
-- [ ] Configurar Prisma + conexão com Postgres local (dev).
-- [ ] Modelar `schema.prisma` a partir de `docs/03-MODELO-DADOS.md` (incluindo já
+- [x] Inicializar projeto Next.js 15 + TypeScript + Tailwind + shadcn/ui.
+- [x] Configurar Prisma + conexão com Postgres local (dev).
+- [x] Modelar `schema.prisma` a partir de `docs/03-MODELO-DADOS.md` (incluindo já
       os campos de branding do `Tenant` e a entidade `IntegracaoERP`) e
       rodar a primeira migration.
-- [ ] Configurar Auth.js com login de e-mail/senha e middleware de RBAC
+- [x] Configurar Auth.js com login de e-mail/senha e middleware de RBAC
       (`SUPER_ADMIN`, `ADMIN_PROVEDOR`, `GESTOR`, `COLABORADOR`).
-- [ ] Middleware de resolução de tenant por subdomínio **e** por domínio
+- [x] Middleware de resolução de tenant por subdomínio **e** por domínio
       customizado (`dominioCustomizado`), já lendo logo/cores/nome de
       exibição para injetar no layout.
+
+> **Decisões tomadas na Fase 0** (valem para as próximas fases):
+> - `SUPER_ADMIN` é o único `Usuario` com `tenantId` nulo (CHECK no banco) e só
+>   faz login no domínio da plataforma; o e-mail é único por tenant, então o
+>   login descobre o tenant pelo domínio acessado.
+> - Dados de negócio são lidos e gravados via `dbDoTenant(tenantId)`
+>   (`src/lib/tenant-db.ts`) ou `exigirSessaoDeTenant()` (`src/lib/sessao.ts`),
+>   nunca com o client Prisma cru. Escritas aninhadas não são escopadas: crie
+>   registros relacionados em chamadas separadas.
+> - O ledger `TransacaoPontos` é protegido por trigger contra `UPDATE`/`DELETE`.
+> - Prisma fixado na linha 6 e Auth.js em `5.0.0-beta.32` (versão exata).
 
 ### Fase 1 — Núcleo de negócio (MVP)
 - [ ] CRUD de `Tenant` (via Super Admin), incluindo campos de marca, e
