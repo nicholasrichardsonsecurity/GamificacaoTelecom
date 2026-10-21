@@ -10,6 +10,8 @@ nesta ordem antes de qualquer código ser escrito (todos ficam em `docs/`):
    multi-tenancy, RBAC, conectores de ERP).
 3. `docs/03-MODELO-DADOS.md` — modelo de dados (vira `prisma/schema.prisma`).
 4. `docs/04-DEPLOY-DEBIAN.md` — como colocar em produção em um servidor Debian.
+5. `docs/REFERENCIA-IXC-SGP.md` — o que já se sabe das APIs do IXC e do SGP
+   (leitura obrigatória antes da Fase 2).
 
 ## Projeto
 
@@ -41,9 +43,13 @@ avançada.
 - **Ledger imutável de pontos**: nunca fazer `UPDATE` em saldo de pontos;
   sempre inserir uma nova linha em `TransacaoPontos` e calcular o saldo por
   agregação (ver seção 4 de `docs/03-MODELO-DADOS.md`).
-- **Idempotência** em qualquer endpoint de webhook externo (usar
-  `origemExternaId` para atendimentos e `idExternoERP` para colaboradores,
-  ambos únicos por tenant).
+- **Idempotência** em qualquer importação externa — consulta periódica ou
+  webhook (usar `origemExternaId` para atendimentos e `idExternoERP` para
+  colaboradores e clientes, todos únicos por tenant).
+- **Saldo com piso em zero no débito**: uma avaliação negativa nunca debita
+  além do saldo; o valor bruto da regra fica em `pontosCalculados`. Créditos
+  ficam pendentes até `disponivelEm` (ver seção 4 de
+  `docs/03-MODELO-DADOS.md`).
 - **Credenciais de terceiros** (tokens de IXC/SGP) sempre criptografadas em
   repouso — nunca em texto puro no banco ou em log.
 - Commits pequenos e objetivos; preferir Server Actions do Next.js para
@@ -63,51 +69,93 @@ avançada.
 ## Ordem de implementação sugerida (roadmap de fases)
 
 ### Fase 0 — Fundação técnica (já com white-label no schema)
-- [ ] Inicializar projeto Next.js 15 + TypeScript + Tailwind + shadcn/ui.
-- [ ] Configurar Prisma + conexão com Postgres local (dev).
-- [ ] Modelar `schema.prisma` a partir de `docs/03-MODELO-DADOS.md` (incluindo já
+- [x] Inicializar projeto Next.js 15 + TypeScript + Tailwind + shadcn/ui.
+- [x] Configurar Prisma + conexão com Postgres local (dev).
+- [x] Modelar `schema.prisma` a partir de `docs/03-MODELO-DADOS.md` (incluindo já
       os campos de branding do `Tenant` e a entidade `IntegracaoERP`) e
       rodar a primeira migration.
-- [ ] Configurar Auth.js com login de e-mail/senha e middleware de RBAC
+- [x] Configurar Auth.js com login de e-mail/senha e middleware de RBAC
       (`SUPER_ADMIN`, `ADMIN_PROVEDOR`, `GESTOR`, `COLABORADOR`).
-- [ ] Middleware de resolução de tenant por subdomínio **e** por domínio
+- [x] Middleware de resolução de tenant por subdomínio **e** por domínio
       customizado (`dominioCustomizado`), já lendo logo/cores/nome de
       exibição para injetar no layout.
 
+> **Decisões tomadas na Fase 0** (valem para as próximas fases):
+> - `SUPER_ADMIN` é o único `Usuario` com `tenantId` nulo (CHECK no banco) e só
+>   faz login no domínio da plataforma; o e-mail é único por tenant, então o
+>   login descobre o tenant pelo domínio acessado.
+> - Dados de negócio são lidos e gravados via `dbDoTenant(tenantId)`
+>   (`src/lib/tenant-db.ts`) ou `exigirSessaoDeTenant()` (`src/lib/sessao.ts`),
+>   nunca com o client Prisma cru. Escritas aninhadas não são escopadas: crie
+>   registros relacionados em chamadas separadas.
+> - O ledger `TransacaoPontos` é protegido por trigger contra `UPDATE`/`DELETE`.
+> - Prisma fixado na linha 6 e Auth.js em `5.0.0-beta.32` (versão exata).
+>
+> **Decisões da revisão de coerência (out/2026)**, já refletidas nos docs e
+> no schema (migration `revisao_coerencia`):
+> - Configurações do motor por tenant em `ConfiguracaoPontuacao`
+>   (`diasPendencia`, `limiteDiario`, `limiteSemanal`, `nivelRisco`,
+>   `prazoContatoHoras`).
+> - O link de avaliação é um `ConvitePesquisa` (token só como hash, com
+>   expiração); a `Avaliacao` só nasce quando o cliente responde e guarda
+>   sinais antifraude.
+> - Colaborador sem senha entra por `ConviteAcesso` (primeiro acesso).
+> - Contestação de avaliação (`ContestacaoAvaliacao`) com estorno via
+>   `AJUSTE_MANUAL`, que exige `motivo` (CHECK no banco).
+> - Na Fase 2, a consulta periódica é o caminho principal; webhook é opcional.
+
 ### Fase 1 — Núcleo de negócio (MVP)
 - [ ] CRUD de `Tenant` (via Super Admin), incluindo campos de marca, e
-      onboarding básico de um provedor.
+      onboarding básico de um provedor, já copiando o template padrão de
+      regras, níveis, selos e `ConfiguracaoPontuacao`.
+- [ ] Script para criar o primeiro `SUPER_ADMIN` de produção com senha
+      própria (o seed é só para desenvolvimento).
 - [ ] Tela de branding para o Admin do Provedor (upload de logo, escolha de
       cores, nome de exibição).
 - [ ] CRUD de `Usuario`/`Equipe` dentro de um tenant (Admin do Provedor),
       com cadastro manual funcionando desde já (independente da integração
-      de ERP da Fase 2).
-- [ ] CRUD de `RegraPontuacao` configurável por tenant.
+      de ERP da Fase 2), respeitando os limites do plano.
+- [ ] Importação de colaboradores por planilha (CSV), com *upsert* por
+      e-mail ou `idExternoERP` — garantia para provedores sem integração.
+- [ ] Convite de primeiro acesso (`ConviteAcesso`) para colaboradores sem
+      senha.
+- [ ] CRUD de `RegraPontuacao` e tela de `ConfiguracaoPontuacao` por tenant.
 - [ ] Criação de `Atendimento` (manual, via formulário admin, para o MVP
       funcionar sem integração externa ainda).
-- [ ] Geração de link assinado de avaliação (`tokenAcesso`) e página pública
-      `/avaliar/[token]` com a UI de "sinal de Wi-Fi" (1 a 5 barras), já
-      usando o branding do tenant.
+- [ ] Geração do `ConvitePesquisa` (link com token e expiração) e página
+      pública `/avaliar/[token]` com a UI de "sinal de Wi-Fi" (1 a 5
+      barras), já usando o branding do tenant, registrando os sinais
+      antifraude e com opção "não quero mais receber pesquisas".
 - [ ] Motor de pontuação (`lib/pontuacao.ts`): calcular e gravar
-      `TransacaoPontos` ao receber uma `Avaliacao`.
+      `TransacaoPontos` ao receber uma `Avaliacao`, com pendência, limites,
+      piso no débito e avaliação suspeita indo para revisão.
 - [ ] Abertura automática de `CasoRecuperacao` para notas baixas.
-- [ ] Painel do colaborador: saldo de pontos, extrato, nível atual, selos.
+- [ ] Contestação de avaliação pelo colaborador e decisão do gestor.
+- [ ] Painel do colaborador: saldo disponível e pendente, extrato, nível
+      atual, selos.
 - [ ] Ranking por equipe/tenant/período.
+- [ ] Relatório de satisfação (CSAT) para o provedor: média de sinal e taxa
+      de resposta por tipo de atendimento, equipe e período.
 
 ### Fase 2 — Conectores de ERP: IXC e SGP (prioridade)
 - [ ] Definir a interface `ConectorERP` (`src/lib/erp-connectors/types.ts`).
-- [ ] Implementar `ixc.ts`: autenticação, `listarColaboradores`,
-      `sincronizar` (levantar a documentação real da API do IXC junto ao
-      provedor/fornecedor antes de implementar).
+- [ ] Validar as APIs antes de codar: SGP no sandbox `demo.sgp.net.br` e
+      IXC com acesso de teste de um provedor (ex.: GigaNetPe), confirmando
+      autenticação, endpoint de O.S. concluídas e se existe endpoint de
+      colaboradores (checklists em `docs/REFERENCIA-IXC-SGP.md`).
+- [ ] Implementar `ixc.ts`: autenticação, `listarAtendimentosConcluidos`,
+      `listarColaboradores` (se a API permitir) e `sincronizar`.
 - [ ] Implementar `sgp.ts`: idem, para a API do SGP.
 - [ ] Tela de configuração de `IntegracaoERP` para o Admin do Provedor
       (escolher sistema, informar credenciais, testar conexão).
-- [ ] Worker BullMQ de sincronização periódica (*upsert* de `Usuario` por
-      `idExternoERP`, nunca duplicando, desativando quem saiu do ERP sem
-      apagar histórico de pontos).
-- [ ] Endpoints de webhook `/api/webhooks/ixc` e `/api/webhooks/sgp` para
-      criação de `Atendimento` em tempo real, com idempotência por
-      `origemExternaId`.
+- [ ] Worker BullMQ de sincronização periódica — caminho principal:
+      importa O.S. concluídas como `Atendimento` (idempotente por
+      `origemExternaId`) e faz *upsert* de `Usuario` por `idExternoERP`,
+      nunca duplicando, desativando quem saiu do ERP sem apagar histórico
+      de pontos.
+- [ ] (Opcional, se o ERP oferecer) Endpoints de webhook `/api/webhooks/ixc`
+      e `/api/webhooks/sgp` para criação de `Atendimento` em tempo real,
+      com a mesma idempotência.
 
 ### Fase 3 — Prêmios e resgate
 - [ ] CRUD de `Premio` com upload de múltiplas fotos (`sharp` para resize).
@@ -121,6 +169,8 @@ avançada.
       (abstração `NotificadorWhatsApp` + fallback e-mail/SMS, remetente
       configurável por tenant).
 - [ ] Notificação ao gestor quando um `CasoRecuperacao` é aberto.
+- [ ] LGPD: link de descadastro em toda mensagem e anonimização de
+      telefone/e-mail de clientes após o prazo de retenção.
 - [ ] Campanhas de pontos (`CampanhaPontos`) com multiplicador temporário.
 
 ### Fase 5 — White-label avançado e comercialização nacional

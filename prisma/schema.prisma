@@ -1,0 +1,531 @@
+// Schema do SinalPlus — traduzido de docs/03-MODELO-DADOS.md.
+//
+// Regras que valem para todo o arquivo:
+// - Toda tabela de negócio tem `tenantId` (exceto `Plano`, que é global).
+// - O branding white-label já nasce no `Tenant`.
+// - `TransacaoPontos` é um ledger imutável: um trigger no banco bloqueia
+//   UPDATE e DELETE (ver migration inicial).
+// - Restrições que o Prisma não expressa (CHECKs, índices parciais, trigger)
+//   ficam em SQL na migration `init`.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN_PROVEDOR
+  GESTOR
+  COLABORADOR
+}
+
+enum StatusTenant {
+  ATIVO
+  SUSPENSO
+}
+
+enum SistemaERP {
+  IXC
+  SGP
+}
+
+enum OrigemCadastro {
+  MANUAL
+  IXC
+  SGP
+}
+
+enum StatusSincronizacao {
+  SUCESSO
+  ERRO
+  NUNCA_EXECUTADA
+}
+
+enum TipoAtendimento {
+  INSTALACAO
+  SUPORTE
+  VENDA
+  RENEGOCIACAO
+}
+
+enum StatusAtendimento {
+  CONCLUIDO
+}
+
+enum TipoTransacao {
+  CREDITO_AVALIACAO
+  DEBITO_AVALIACAO
+  RESGATE
+  AJUSTE_MANUAL
+}
+
+enum StatusCaso {
+  ABERTO
+  EM_ANDAMENTO
+  RESOLVIDO
+}
+
+enum CriterioSelo {
+  SEQUENCIA_SINAL_MAXIMO
+  ZERO_RECLAMACOES_MES
+  PRIMEIRO_RESGATE
+  CUSTOM
+}
+
+enum TipoConviteAcesso {
+  PRIMEIRO_ACESSO
+  REDEFINIR_SENHA
+}
+
+enum CanalPesquisa {
+  WHATSAPP
+  SMS
+  EMAIL
+  MANUAL
+}
+
+enum StatusContestacao {
+  ABERTA
+  ACEITA
+  RECUSADA
+}
+
+enum StatusResgate {
+  SOLICITADO
+  APROVADO
+  ENTREGUE
+  NEGADO
+}
+
+// ─── Plataforma ─────────────────────────────────────────────────────────────
+
+model Plano {
+  id                        String   @id @default(cuid())
+  nome                      String   @unique
+  limiteColaboradores       Int?
+  limiteFiliais             Int?
+  permiteDominioCustomizado Boolean  @default(false)
+  permiteIntegracaoERP      Boolean  @default(false)
+  recursos                  Json     @default("{}")
+  tenants                   Tenant[]
+}
+
+model Tenant {
+  id       String       @id @default(cuid())
+  nome     String
+  slug     String       @unique
+  planoId  String
+  plano    Plano        @relation(fields: [planoId], references: [id])
+  status   StatusTenant @default(ATIVO)
+  criadoEm DateTime     @default(now())
+
+  // White-label (desde o MVP)
+  nomeExibicao       String
+  logoUrl            String?
+  faviconUrl         String?
+  corPrimaria        String  @default("#16a34a")
+  corSecundaria      String  @default("#0f172a")
+  dominioCustomizado String? @unique
+  dominioVerificado  Boolean @default(false)
+  emailRemetente     String?
+
+  integracoesERP        IntegracaoERP[]
+  configuracaoPontuacao ConfiguracaoPontuacao?
+  usuarios              Usuario[]
+  convitesAcesso        ConviteAcesso[]
+  convitesPesquisa      ConvitePesquisa[]
+  contestacoes          ContestacaoAvaliacao[]
+  equipes               Equipe[]
+  clientesFinais        ClienteFinal[]
+  atendimentos          Atendimento[]
+  avaliacoes            Avaliacao[]
+  regrasPontuacao       RegraPontuacao[]
+  campanhas             CampanhaPontos[]
+  transacoes            TransacaoPontos[]
+  casosRecuperacao      CasoRecuperacao[]
+  niveis                Nivel[]
+  selos                 Selo[]
+  selosConquistados     SeloConquistado[]
+  premios               Premio[]
+  premioFotos           PremioFoto[]
+  resgates              Resgate[]
+}
+
+model IntegracaoERP {
+  id                        String              @id @default(cuid())
+  tenantId                  String
+  tenant                    Tenant              @relation(fields: [tenantId], references: [id])
+  sistema                   SistemaERP
+  urlBase                   String
+  /// Credenciais cifradas (AES-256-GCM, ver src/lib/crypto.ts). Nunca texto puro.
+  credenciais               String
+  ativa                     Boolean             @default(true)
+  /// Intervalo da sincronização periódica, em minutos.
+  frequenciaSincronizacao   Int                 @default(60)
+  ultimaSincronizacaoEm     DateTime?
+  ultimoStatusSincronizacao StatusSincronizacao @default(NUNCA_EXECUTADA)
+  criadoEm                  DateTime            @default(now())
+
+  @@unique([tenantId, sistema])
+}
+
+// ─── Pessoas ────────────────────────────────────────────────────────────────
+
+model Usuario {
+  id        String   @id @default(cuid())
+  /// Nulo apenas para SUPER_ADMIN (garantido por CHECK no banco).
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  nome      String
+  email     String?
+  senhaHash String?
+  role      Role     @default(COLABORADOR)
+  equipeId  String?
+  equipe    Equipe?  @relation("MembrosEquipe", fields: [equipeId], references: [id])
+  avatarUrl String?
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now())
+
+  // Sincronização com ERP
+  origemCadastro OrigemCadastro @default(MANUAL)
+  idExternoERP   String?
+  sincronizadoEm DateTime?
+
+  equipesGeridas        Equipe[]               @relation("GestorEquipe")
+  atendimentos          Atendimento[]
+  transacoes            TransacaoPontos[]      @relation("TransacoesColaborador")
+  transacoesCriadas     TransacaoPontos[]      @relation("TransacoesCriadasPor")
+  casosResponsavel      CasoRecuperacao[]
+  selosConquistados     SeloConquistado[]
+  resgates              Resgate[]              @relation("ResgatesColaborador")
+  resgatesAprovados     Resgate[]              @relation("ResgatesAprovadosPor")
+  convitesAcesso        ConviteAcesso[]
+  contestacoes          ContestacaoAvaliacao[] @relation("ContestacoesColaborador")
+  contestacoesDecididas ContestacaoAvaliacao[] @relation("ContestacoesDecididasPor")
+
+  @@unique([tenantId, email])
+  @@unique([tenantId, idExternoERP])
+}
+
+/// Link de uso único para definir senha (primeiro acesso ou redefinição).
+model ConviteAcesso {
+  id        String            @id @default(cuid())
+  tenantId  String
+  tenant    Tenant            @relation(fields: [tenantId], references: [id])
+  usuarioId String
+  usuario   Usuario           @relation(fields: [usuarioId], references: [id])
+  /// Hash do token; o token em si só existe no link enviado.
+  tokenHash String            @unique
+  tipo      TipoConviteAcesso @default(PRIMEIRO_ACESSO)
+  expiraEm  DateTime
+  usadoEm   DateTime?
+  criadoEm  DateTime          @default(now())
+
+  @@index([tenantId, usuarioId])
+}
+
+model Equipe {
+  id        String           @id @default(cuid())
+  tenantId  String
+  tenant    Tenant           @relation(fields: [tenantId], references: [id])
+  nome      String
+  gestorId  String?
+  gestor    Usuario?         @relation("GestorEquipe", fields: [gestorId], references: [id])
+  membros   Usuario[]        @relation("MembrosEquipe")
+  campanhas CampanhaPontos[]
+
+  @@unique([tenantId, nome])
+}
+
+model ClienteFinal {
+  id            String        @id @default(cuid())
+  tenantId      String
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  nome          String
+  telefone      String?
+  email         String?
+  criadoEm      DateTime      @default(now())
+  /// Id do assinante no IXC/SGP.
+  idExternoERP  String?
+  /// LGPD: o cliente pediu para não receber mais pesquisas.
+  naoPerturbe   Boolean       @default(false)
+  naoPerturbeEm DateTime?
+  atendimentos  Atendimento[]
+
+  @@unique([tenantId, idExternoERP])
+}
+
+// ─── Atendimento e avaliação ────────────────────────────────────────────────
+
+model Atendimento {
+  id              String            @id @default(cuid())
+  tenantId        String
+  tenant          Tenant            @relation(fields: [tenantId], references: [id])
+  tipo            TipoAtendimento
+  colaboradorId   String
+  colaborador     Usuario           @relation(fields: [colaboradorId], references: [id])
+  clienteFinalId  String
+  clienteFinal    ClienteFinal      @relation(fields: [clienteFinalId], references: [id])
+  /// Id da O.S./chamado no ERP; garante idempotência da importação.
+  origemExternaId String?
+  status          StatusAtendimento @default(CONCLUIDO)
+  concluidoEm     DateTime          @default(now())
+  convite         ConvitePesquisa?
+  avaliacao       Avaliacao?
+
+  @@unique([tenantId, origemExternaId])
+  @@index([tenantId, colaboradorId])
+}
+
+/// Link de pesquisa enviado ao cliente; existe antes da resposta.
+model ConvitePesquisa {
+  id            String        @id @default(cuid())
+  tenantId      String
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  atendimentoId String        @unique
+  atendimento   Atendimento   @relation(fields: [atendimentoId], references: [id])
+  /// Hash do token; o token em si só existe no link enviado.
+  tokenHash     String        @unique
+  canal         CanalPesquisa
+  criadoEm      DateTime      @default(now())
+  enviadoEm     DateTime?
+  expiraEm      DateTime
+  respondidoEm  DateTime?
+  avaliacao     Avaliacao?
+
+  @@index([tenantId, criadoEm])
+}
+
+/// Criada quando o cliente responde ao convite.
+model Avaliacao {
+  id            String          @id @default(cuid())
+  tenantId      String
+  tenant        Tenant          @relation(fields: [tenantId], references: [id])
+  atendimentoId String          @unique
+  atendimento   Atendimento     @relation(fields: [atendimentoId], references: [id])
+  conviteId     String          @unique
+  convite       ConvitePesquisa @relation(fields: [conviteId], references: [id])
+  /// 1 a 5 barras de sinal (CHECK no banco).
+  nivelSinal    Int
+  comentario    String?
+  respondidaEm  DateTime        @default(now())
+
+  // Sinais antifraude: avaliação suspeita não pontua automaticamente.
+  ipResposta        String?
+  userAgentResposta String?
+  suspeita          Boolean @default(false)
+  motivoSuspeita    String?
+
+  transacao       TransacaoPontos?
+  casoRecuperacao CasoRecuperacao?
+  contestacao     ContestacaoAvaliacao?
+
+  @@index([tenantId, respondidaEm])
+}
+
+model ContestacaoAvaliacao {
+  id            String            @id @default(cuid())
+  tenantId      String
+  tenant        Tenant            @relation(fields: [tenantId], references: [id])
+  avaliacaoId   String            @unique
+  avaliacao     Avaliacao         @relation(fields: [avaliacaoId], references: [id])
+  colaboradorId String
+  colaborador   Usuario           @relation("ContestacoesColaborador", fields: [colaboradorId], references: [id])
+  justificativa String
+  status        StatusContestacao @default(ABERTA)
+  decididaPorId String?
+  decididaPor   Usuario?          @relation("ContestacoesDecididasPor", fields: [decididaPorId], references: [id])
+  decisao       String?
+  criadaEm      DateTime          @default(now())
+  decididaEm    DateTime?
+
+  @@index([tenantId, status])
+}
+
+// ─── Pontuação ──────────────────────────────────────────────────────────────
+
+/// Parâmetros do motor de pontuação, um registro por tenant.
+model ConfiguracaoPontuacao {
+  id                String   @id @default(cuid())
+  tenantId          String   @unique
+  tenant            Tenant   @relation(fields: [tenantId], references: [id])
+  /// Dias em que um crédito fica pendente antes de virar saldo gastável.
+  diasPendencia     Int      @default(7)
+  /// Teto de pontos creditados por colaborador no dia/semana (nulo = sem teto).
+  limiteDiario      Int?
+  limiteSemanal     Int?
+  /// Nota menor ou igual a este nível abre CasoRecuperacao.
+  nivelRisco        Int      @default(2)
+  prazoContatoHoras Int      @default(24)
+  atualizadoEm      DateTime @default(now()) @updatedAt
+}
+
+model RegraPontuacao {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id])
+  /// 1 a 5 barras de sinal (CHECK no banco).
+  nivelSinal Int
+  pontos     Int
+  ativaDesde DateTime  @default(now())
+  ativaAte   DateTime?
+
+  @@index([tenantId, nivelSinal, ativaDesde])
+}
+
+model CampanhaPontos {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  nome          String
+  multiplicador Decimal  @db.Decimal(5, 2)
+  inicio        DateTime
+  fim           DateTime
+  equipeId      String?
+  equipe        Equipe?  @relation(fields: [equipeId], references: [id])
+
+  @@index([tenantId, inicio, fim])
+}
+
+/// Ledger imutável: nunca editar nem apagar. Saldo = soma de `pontos`
+/// (ver docs/03-MODELO-DADOS.md, seção 4).
+model TransacaoPontos {
+  id                String        @id @default(cuid())
+  tenantId          String
+  tenant            Tenant        @relation(fields: [tenantId], references: [id])
+  colaboradorId     String
+  colaborador       Usuario       @relation("TransacoesColaborador", fields: [colaboradorId], references: [id])
+  tipo              TipoTransacao
+  /// Delta efetivamente aplicado (já com limites e piso em zero).
+  pontos            Int
+  /// Delta bruto que a regra daria, para relatório.
+  pontosCalculados  Int
+  /// A partir de quando o crédito conta no saldo disponível (débitos: imediato).
+  disponivelEm      DateTime      @default(now())
+  /// Obrigatório em AJUSTE_MANUAL (CHECK no banco).
+  motivo            String?
+  origemAvaliacaoId String?       @unique
+  origemAvaliacao   Avaliacao?    @relation(fields: [origemAvaliacaoId], references: [id])
+  origemResgateId   String?
+  origemResgate     Resgate?      @relation(fields: [origemResgateId], references: [id])
+  criadoEm          DateTime      @default(now())
+  criadoPorId       String?
+  criadoPor         Usuario?      @relation("TransacoesCriadasPor", fields: [criadoPorId], references: [id])
+
+  @@index([tenantId, colaboradorId, criadoEm])
+  @@index([tenantId, colaboradorId, disponivelEm])
+}
+
+model CasoRecuperacao {
+  id                  String     @id @default(cuid())
+  tenantId            String
+  tenant              Tenant     @relation(fields: [tenantId], references: [id])
+  avaliacaoId         String     @unique
+  avaliacao           Avaliacao  @relation(fields: [avaliacaoId], references: [id])
+  gestorResponsavelId String?
+  gestorResponsavel   Usuario?   @relation(fields: [gestorResponsavelId], references: [id])
+  status              StatusCaso @default(ABERTO)
+  prazoContato        DateTime
+  acaoTomada          String?
+  criadoEm            DateTime   @default(now())
+  resolvidoEm         DateTime?
+
+  @@index([tenantId, status])
+}
+
+// ─── Gamificação ────────────────────────────────────────────────────────────
+
+model Nivel {
+  id                     String  @id @default(cuid())
+  tenantId               String
+  tenant                 Tenant  @relation(fields: [tenantId], references: [id])
+  nome                   String
+  pontosAcumuladosMinimo Int
+  icone                  String?
+  cor                    String?
+
+  @@unique([tenantId, pontosAcumuladosMinimo])
+}
+
+model Selo {
+  id           String            @id @default(cuid())
+  tenantId     String
+  tenant       Tenant            @relation(fields: [tenantId], references: [id])
+  nome         String
+  descricao    String?
+  icone        String?
+  criterioTipo CriterioSelo
+  conquistas   SeloConquistado[]
+}
+
+model SeloConquistado {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  colaboradorId String
+  colaborador   Usuario  @relation(fields: [colaboradorId], references: [id])
+  seloId        String
+  selo          Selo     @relation(fields: [seloId], references: [id])
+  conquistadoEm DateTime @default(now())
+
+  @@unique([colaboradorId, seloId])
+  @@index([tenantId])
+}
+
+// ─── Prêmios e resgate ──────────────────────────────────────────────────────
+
+model Premio {
+  id          String       @id @default(cuid())
+  tenantId    String
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  nome        String
+  descricao   String?
+  custoPontos Int
+  categoria   String
+  estoque     Int          @default(0)
+  ativo       Boolean      @default(true)
+  fotos       PremioFoto[]
+  resgates    Resgate[]
+
+  @@index([tenantId, ativo])
+}
+
+model PremioFoto {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  premioId String
+  premio   Premio @relation(fields: [premioId], references: [id], onDelete: Cascade)
+  url      String
+  ordem    Int    @default(0)
+
+  @@index([premioId, ordem])
+}
+
+model Resgate {
+  id                 String            @id @default(cuid())
+  tenantId           String
+  tenant             Tenant            @relation(fields: [tenantId], references: [id])
+  colaboradorId      String
+  colaborador        Usuario           @relation("ResgatesColaborador", fields: [colaboradorId], references: [id])
+  premioId           String
+  premio             Premio            @relation(fields: [premioId], references: [id])
+  pontosDebitados    Int
+  status             StatusResgate     @default(SOLICITADO)
+  aprovadoPorId      String?
+  aprovadoPor        Usuario?          @relation("ResgatesAprovadosPor", fields: [aprovadoPorId], references: [id])
+  solicitadoEm       DateTime          @default(now())
+  entregueEm         DateTime?
+  fotoComprovacaoUrl String?
+  transacoes         TransacaoPontos[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, colaboradorId])
+}

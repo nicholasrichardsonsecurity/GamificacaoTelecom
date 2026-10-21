@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: Lint, tipos, testes e build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sinalplus
+          POSTGRES_PASSWORD: sinalplus
+          POSTGRES_DB: sinalplus_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sinalplus"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://sinalplus:sinalplus@localhost:5432/sinalplus_test
+      TEST_DATABASE_URL: postgresql://sinalplus:sinalplus@localhost:5432/sinalplus_test
+      AUTH_SECRET: segredo-apenas-para-o-ci
+      PLATAFORMA_DOMINIO: localhost
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Validar schema Prisma
+        run: npx prisma validate
+
+      - name: Aplicar migrations
+        run: npx prisma migrate deploy
+
+      - name: Conferir que schema e migrations batem
+        run: >-
+          npx prisma migrate diff
+          --from-url "$DATABASE_URL"
+          --to-schema-datamodel prisma/schema.prisma
+          --exit-code
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Testes
+        run: npm test
+
+      - name: Seed
+        run: npm run db:seed
+
+      - name: Build
+        run: npm run build

@@ -75,11 +75,26 @@ sudo -u sinalplus -i
 cd /var/www/sinalplus
 git clone <URL_DO_REPOSITORIO> app
 cd app
-cp .env.example .env     # preencher DATABASE_URL, REDIS_URL, secrets, etc.
+cp .env.example .env     # preencher as variáveis abaixo
 npm ci
 npx prisma migrate deploy
 npm run build
 ```
+
+Variáveis obrigatórias no `.env` de produção:
+
+| Variável | Valor |
+|---|---|
+| `DATABASE_URL` | a URL criada na seção 5 |
+| `AUTH_SECRET` | `openssl rand -base64 32` |
+| `PLATAFORMA_DOMINIO` | domínio da plataforma, ex.: `sinalplus.com.br` (tenants ficam em `{slug}.sinalplus.com.br`) |
+| `PLATAFORMA_NOME` | nome exibido só no domínio da plataforma |
+| `CREDENCIAIS_CHAVE` | `openssl rand -base64 32` — cifra as credenciais de IXC/SGP; **guarde fora do servidor**, sem ela as credenciais salvas não podem ser lidas |
+| `REDIS_URL` | `redis://localhost:6379` (a partir da Fase 2) |
+
+> Não rode `npm run db:seed` em produção: ele cria usuários de exemplo com
+> senha conhecida. O primeiro `SUPER_ADMIN` de produção deve ser criado com
+> senha própria (script de criação a ser adicionado na Fase 1).
 
 ## 9. PM2 (gerenciador de processo)
 
@@ -87,7 +102,7 @@ npm run build
 sudo npm install -g pm2
 cd /var/www/sinalplus/app
 pm2 start npm --name sinalplus-web -- start
-pm2 start npm --name sinalplus-worker -- run worker   # processo das filas BullMQ
+pm2 start npm --name sinalplus-worker -- run worker   # filas BullMQ — só a partir da Fase 2
 pm2 save
 pm2 startup systemd -u sinalplus --hp /var/www/sinalplus
 ```
@@ -106,7 +121,7 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
+        proxy_set_header Host $host;   # obrigatório: o tenant é resolvido pelo Host
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -166,7 +181,7 @@ pm2 reload sinalplus-web
 pm2 reload sinalplus-worker
 ```
 
-## 15. Alternativa com Docker Compose (fase 2, opcional)
+## 15. Alternativa com Docker Compose (opcional, pós-MVP)
 
 Se o projeto crescer e precisar rodar em mais de um servidor ou precisar de
 ambientes de staging isolados, considerar migrar para um `docker-compose.yml`

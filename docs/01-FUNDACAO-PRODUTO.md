@@ -67,7 +67,9 @@ cada um com sua própria marca) onde:
    **cliente** — o colaborador pode já existir por ter sido sincronizado do
    IXC/SGP.
 2. O sistema dispara uma pesquisa de satisfação para o cliente, via link
-   (WhatsApp, SMS ou e-mail) — sem necessidade de criar conta.
+   único com prazo de validade (WhatsApp, SMS ou e-mail) — sem necessidade
+   de criar conta. Clientes que pediram para não receber pesquisas são
+   respeitados.
 3. O cliente escolhe o nível de satisfação em uma UI com **ícone de sinal de
    Wi-Fi** (ver seção 5) e, opcionalmente, deixa um comentário.
 4. A plataforma calcula a pontuação resultante conforme as **regras de
@@ -111,21 +113,28 @@ Regras adicionais:
 - **Vínculo obrigatório a um atendimento real** (ordem de serviço / ticket /
   venda) para evitar fraude — feedback "solto" sem atendimento associado não
   pontua.
-- **Janela de validade**: pontos "pendentes" por X dias até confirmação (evita
-  manipulação de avaliações por terceiros).
-- **Limite diário/semanal de pontos por colaborador** (configurável) para
-  evitar concentração artificial.
+- **Janela de validade**: pontos "pendentes" por X dias (padrão 7,
+  configurável por tenant) até virarem saldo gastável — evita manipulação de
+  avaliações por terceiros e dá tempo para contestação e auditoria.
+- **Limite diário/semanal de pontos creditados por colaborador**
+  (configurável) para evitar concentração artificial.
 - **Multiplicadores de campanha**: o admin pode criar campanhas sazonais
   (ex.: "mês da fibra" = pontos em dobro).
-- Pontos não podem ficar negativos no saldo total (piso em zero), mas o
-  histórico de descontos continua registrado para fins de relatório.
+- Pontos não podem ficar negativos no saldo total (piso em zero). O piso é
+  aplicado **no momento do débito**: uma nota baixa só desconta até o saldo
+  que o colaborador tem, e o desconto "cheio" que a regra daria continua
+  registrado para fins de relatório. Assim, um crédito futuro nunca é
+  consumido por uma dívida acumulada (ver `03-MODELO-DADOS.md`, seção 4).
+- **Contestação**: o colaborador pode contestar uma avaliação que considere
+  injusta (ex.: problema de rede fora do alcance dele); o gestor aceita ou
+  recusa, e o estorno, quando houver, entra como ajuste auditado.
 
 ## 7. Níveis e selos (gamificação além dos pontos)
 
 - **Níveis do colaborador** (ex.: Sinal Fraco → Sinal Médio → Sinal Forte →
   Fibra Pura → Lenda da Rede), definidos por pontuação acumulada histórica
   (não o saldo atual, para não "rebaixar" alguém por ter gastado pontos).
-- **Selos/conquistas**: ex. "7 avaliações 5★ seguidas", "Zero reclamações no
+- **Selos/conquistas**: ex. "7 avaliações de sinal máximo seguidas", "Zero reclamações no
   mês", "Resgatou o primeiro prêmio", "Melhor da filial do mês".
 - **Ranking**: geral, por filial/equipe e por período (semana/mês/trimestre).
 - **Hall da fama opcional**: tela pública (sem dados sensíveis) que o
@@ -238,6 +247,18 @@ uma implementação para IXC e outra para SGP — ver `02-ARQUITETURA-STACK.md`)
 para que adicionar suporte a um terceiro sistema de gestão no futuro não
 exija reescrever a lógica de negócio.
 
+**O que já se sabe das APIs** (ver `REFERENCIA-IXC-SGP.md`): nenhum dos dois
+sistemas tem webhook nativo confirmado, e nenhum endpoint de listagem de
+colaboradores foi confirmado ainda (no SGP, os endpoints públicos encontrados
+são de cliente final e de O.S.). Por isso:
+- a **consulta periódica** (polling) é o caminho principal para importar
+  O.S. concluídas; webhook é opcional, usado se o sistema oferecer;
+- a sincronização de colaboradores só deve ser prometida a um cliente depois
+  de validada no sandbox do SGP (`demo.sgp.net.br`) e com acesso de teste do
+  IXC (via um provedor que já o usa, como a GigaNetPe);
+- a **importação por planilha (CSV)** entra já no MVP, como garantia para
+  qualquer provedor.
+
 Enquanto a sincronização automática de um sistema específico não estiver
 pronta para um tenant, o cadastro manual/importação via planilha continua
 disponível — a integração é um **acelerador para contas grandes**, não um
@@ -266,6 +287,22 @@ bloqueio para o provedor começar a usar a plataforma.
 - **Painel de "saúde da conta" para o Super Admin**: visão de todos os
   tenants (provedores clientes), uso, inadimplência de plano — útil já
   pensando em vender para muitos provedores no Brasil todo.
+
+### Incorporadas ao roadmap após a revisão de coerência (out/2026)
+
+- **Contestação de avaliação** pelo colaborador (seção 6).
+- **Antifraude na resposta**: registrar IP, navegador e horário da resposta;
+  marcar como suspeita (sem pontuar automaticamente) a resposta vinda do
+  mesmo IP/dispositivo de uma sessão do colaborador, ou respondida segundos
+  após o atendimento ser concluído. Complementa o "modo auditor".
+- **Relatório de satisfação (CSAT) para o provedor**: média de sinal e taxa
+  de resposta por tipo de atendimento, equipe e período — o valor que o dono
+  do provedor enxerga além da gamificação.
+- **LGPD do cliente final**: opção de não receber mais pesquisas (link de
+  descadastro em toda mensagem), prazo de retenção de telefone/e-mail e
+  anonimização no hall da fama.
+- **Template de onboarding**: regras de pontuação, níveis e selos padrão
+  copiados automaticamente ao criar um novo tenant.
 
 ## 14. Fora de escopo (nesta primeira versão)
 
