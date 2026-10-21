@@ -4,6 +4,18 @@
 > aplicação em produção em um servidor Debian limpo (testado mentalmente
 > para Debian 12 "bookworm").
 
+> **Servidor da Aplivora (já em produção com outros produtos).** O proxy
+> reverso é o **Caddy** (`/etc/caddy/Caddyfile`), não o Nginx. Neste caso,
+> **não instale `nginx` nem mexa no `ufw`** (seções 2 e 3 valem só para um
+> servidor limpo), use a seção 10 (Caddy) e confira o estado real antes de
+> qualquer mudança: `docker ps`, `ss -lntp` e
+> `caddy validate --config /etc/caddy/Caddyfile`. Convenções do servidor:
+> projeto em `/opt/sinalplus/gamificacaotelecom` (caminho completo nos
+> comandos), porta publicada só em `127.0.0.1`, e uma porta livre no host
+> (proposta: `3600`, ocupadas hoje: 3000, 3001, 3100, 3200, 3300, 3400,
+> 3410, 3411, 3500 e 35432; confirme com `ss -lntp`). Os exemplos abaixo
+> usam `/var/www/sinalplus/app` e a porta 3000; troque pelos valores do servidor.
+
 ## 1. Requisitos do servidor
 
 - Debian 12 (bookworm) ou superior, acesso root/sudo.
@@ -112,7 +124,54 @@ pm2 save
 pm2 startup systemd -u sinalplus --hp /var/www/sinalplus
 ```
 
-## 10. Nginx como proxy reverso
+## 10. Proxy reverso: Caddy (servidor da Aplivora) ou Nginx
+
+### Caddy (o que roda no servidor da Aplivora)
+
+Antes de editar: backup do `Caddyfile`, e nunca alterar um bloco de outro
+produto.
+
+```bash
+sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak-$(date +%F)
+```
+
+Bloco do SinalPlus Telecom (domínio da plataforma **a confirmar**; a proposta
+é `sinalplus.aplivora.com.br`, com os provedores em
+`{slug}.sinalplus.aplivora.com.br`, e `PLATAFORMA_DOMINIO` com o mesmo valor):
+
+```caddy
+sinalplus.aplivora.com.br, *.sinalplus.aplivora.com.br {
+    encode zstd gzip
+
+    # Imagens enviadas servidas direto do disco (opcional).
+    handle_path /uploads/* {
+        root * /opt/sinalplus/gamificacaotelecom/uploads
+        header X-Content-Type-Options nosniff
+        file_server
+    }
+
+    reverse_proxy 127.0.0.1:3600
+}
+```
+
+- O Caddy repassa o `Host` original e **sobrescreve** `X-Forwarded-Host`,
+  `X-Forwarded-For` e `X-Forwarded-Proto` (enquanto `trusted_proxies` não
+  estiver configurado). O app resolve o provedor por esse host, então confirme
+  depois de subir: `curl -sI https://demo.sinalplus.aplivora.com.br/login`.
+- **Certificado wildcard**: `*.sinalplus.aplivora.com.br` exige validação por
+  DNS (um Caddy com o plugin do provedor de DNS) e um registro DNS
+  `*.sinalplus` apontando para o IP do servidor. Sem o plugin, a alternativa
+  é o *on-demand TLS* do Caddy com um endpoint `ask` que só autoriza domínios
+  de provedores cadastrados; ele chega com a automação de domínios da Fase 5.
+  Até lá, publique cada provedor com um bloco próprio.
+- Validar e só então recarregar, sem reiniciar o Caddy:
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+### Nginx (servidor limpo, sem Caddy)
 
 Arquivo `/etc/nginx/sites-available/sinalplus`:
 
@@ -148,7 +207,9 @@ sudo ln -s /etc/nginx/sites-available/sinalplus /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-## 11. HTTPS com Let's Encrypt (Certbot)
+## 11. HTTPS
+
+No Caddy o HTTPS é automático (seção 10). No Nginx, use o Certbot:
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx

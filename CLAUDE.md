@@ -211,9 +211,16 @@ avançada.
 
 - **Nome do produto**: SinalPlus Telecom. É o nome da plataforma
   (`PLATAFORMA_NOME`); cada tenant continua com seu próprio nome de exibição.
-- **Domínio de produção**: um domínio do hub **Aplivora** (endereço exato a
-  confirmar). Tenants ficam em `{slug}.<PLATAFORMA_DOMINIO>`; nada no código
+- **Domínio de produção**: um subdomínio do hub **Aplivora**
+  (`aplivora.com.br`); proposta `sinalplus.aplivora.com.br`, ainda a
+  confirmar. Tenants ficam em `{slug}.<PLATAFORMA_DOMINIO>`; nada no código
   assume `sinalplus.com.br`.
+- **Servidor**: o Debian da Aplivora já roda outros produtos com **Caddy**
+  como proxy reverso (não Nginx). Deploy sem mexer nos outros serviços:
+  porta publicada só em `127.0.0.1`, verificar `docker ps`/`ss -lntp` antes,
+  `caddy validate` antes de `reload` (ver `docs/04-DEPLOY-DEBIAN.md`).
+- **Cobrança**: quando o SinalPlus Telecom for cobrado, passa pelo
+  **Aplivora Billing Hub** (nunca direto no Asaas). Fora do escopo agora.
 - **E-mail**: Resend, usando a conta/domínio do Aplivora.
 - **SMS**: KingSMS.
 - **WhatsApp**: ainda sem API oficial. A abstração `NotificadorWhatsApp`
