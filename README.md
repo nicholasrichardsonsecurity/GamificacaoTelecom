@@ -136,11 +136,18 @@ O detalhamento de cada fase está em [`CLAUDE.md`](CLAUDE.md).
 | [`docs/02-ARQUITETURA-STACK.md`](docs/02-ARQUITETURA-STACK.md) | Stack, estrutura de pastas, multi-tenancy, RBAC e conectores de ERP |
 | [`docs/03-MODELO-DADOS.md`](docs/03-MODELO-DADOS.md) | Entidades, índices e cálculo de saldo |
 | [`docs/04-DEPLOY-DEBIAN.md`](docs/04-DEPLOY-DEBIAN.md) | Passo a passo de produção em Debian 12 com PM2, Nginx e Certbot |
+| [`docs/REFERENCIA-IXC-SGP.md`](docs/REFERENCIA-IXC-SGP.md) | Guia de consulta sobre as APIs do IXC Provedor e do SGP: links oficiais, autenticação, endpoints já mapeados e checklist do que falta confirmar antes de implementar os conectores da Fase 2 |
 
 ## Fora de escopo nesta versão
 
 Pagamento de bônus em dinheiro, app mobile nativo (o MVP usa PWA), conectores
 para ERPs além de IXC e SGP, e cobrança self-service automatizada.
+
+## Licença
+
+Projeto de **uso pessoal e restrito** — ver [`LICENSE.md`](LICENSE.md). Uso
+comercial, testes por terceiros e redistribuição não são permitidos sem
+autorização expressa e por escrito do autor.
 
 ---
 
