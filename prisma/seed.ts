@@ -1,30 +1,17 @@
 /**
  * Dados de desenvolvimento: planos, um Super Admin, um tenant de demonstração
- * com regras de pontuação e níveis padrão, e um usuário por papel.
+ * com o template padrão, um usuário por papel e algumas avaliações.
  * Idempotente: pode rodar várias vezes. Não use em produção.
  */
 import { PrismaClient, type Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { criarConvitePesquisa } from "../src/lib/convites";
+import { aplicarTemplatePadrao, SELOS_PADRAO } from "../src/lib/onboarding";
+import { registrarResposta } from "../src/lib/pontuacao";
+import { dbDoTenant } from "../src/lib/tenant-db";
 
 const prisma = new PrismaClient();
 const SENHA = process.env.SEED_SENHA ?? "sinalplus123";
-
-// Padrão de docs/01-FUNDACAO-PRODUTO.md, seções 6 e 7.
-const REGRAS_PADRAO = [
-  { nivelSinal: 5, pontos: 10 },
-  { nivelSinal: 4, pontos: 5 },
-  { nivelSinal: 3, pontos: 0 },
-  { nivelSinal: 2, pontos: -5 },
-  { nivelSinal: 1, pontos: -10 },
-];
-
-const NIVEIS_PADRAO = [
-  { nome: "Sinal Fraco", pontosAcumuladosMinimo: 0, cor: "#ef4444" },
-  { nome: "Sinal Médio", pontosAcumuladosMinimo: 100, cor: "#eab308" },
-  { nome: "Sinal Forte", pontosAcumuladosMinimo: 300, cor: "#84cc16" },
-  { nome: "Fibra Pura", pontosAcumuladosMinimo: 700, cor: "#22c55e" },
-  { nome: "Lenda da Rede", pontosAcumuladosMinimo: 1500, cor: "#0ea5e9" },
-];
 
 async function main() {
   const senhaHash = await bcrypt.hash(SENHA, 12);
@@ -87,32 +74,45 @@ async function main() {
     }
   }
 
-  if ((await prisma.regraPontuacao.count({ where: { tenantId: tenant.id } })) === 0) {
-    await prisma.regraPontuacao.createMany({
-      data: REGRAS_PADRAO.map((r) => ({ ...r, tenantId: tenant.id })),
-    });
+  // Template padrão (regras, níveis, selos e configuração), como no onboarding.
+  if (!(await prisma.configuracaoPontuacao.findUnique({ where: { tenantId: tenant.id } }))) {
+    await prisma.$transaction((tx) => aplicarTemplatePadrao(tx, tenant.id));
+  } else if ((await prisma.selo.count({ where: { tenantId: tenant.id } })) === 0) {
+    await prisma.selo.createMany({ data: SELOS_PADRAO.map((s) => ({ ...s, tenantId: tenant.id })) });
   }
-  // Padrões de docs/03-MODELO-DADOS.md (ConfiguracaoPontuacao).
-  await prisma.configuracaoPontuacao.upsert({
-    where: { tenantId: tenant.id },
-    update: {},
-    create: { tenantId: tenant.id },
-  });
 
-  for (const n of NIVEIS_PADRAO) {
-    await prisma.nivel.upsert({
-      where: {
-        tenantId_pontosAcumuladosMinimo: {
-          tenantId: tenant.id,
-          pontosAcumuladosMinimo: n.pontosAcumuladosMinimo,
-        },
-      },
-      update: {},
-      create: { ...n, tenantId: tenant.id },
-    });
-  }
+  await atendimentosDeExemplo(tenant.id);
 
   console.log("Seed concluído. Senha de todos os usuários de exemplo:", SENHA);
+}
+
+/** Algumas avaliações para o painel não nascer vazio. */
+async function atendimentosDeExemplo(tenantId: string) {
+  const db = dbDoTenant(tenantId, prisma);
+  if ((await db.atendimento.count()) > 0) return;
+  const carla = await db.usuario.findFirstOrThrow({ where: { email: "colaborador@demo.local" } });
+  const notas = [5, 5, 4, 5, 2, 5, null];
+  const agora = Date.now();
+  for (const [i, nota] of notas.entries()) {
+    const concluidoEm = new Date(agora - (notas.length - i) * 86400_000);
+    const cliente = await db.clienteFinal.create({
+      data: { tenantId, nome: `Cliente exemplo ${i + 1}`, telefone: `(81) 90000-00${10 + i}` },
+    });
+    const atendimento = await db.atendimento.create({
+      data: {
+        tenantId,
+        tipo: i % 3 === 0 ? "INSTALACAO" : "SUPORTE",
+        colaboradorId: carla.id,
+        clienteFinalId: cliente.id,
+        concluidoEm,
+      },
+    });
+    const token = await criarConvitePesquisa(db, tenantId, atendimento.id, "MANUAL", concluidoEm);
+    if (token && nota) {
+      const respondidaEm = new Date(concluidoEm.getTime() + 2 * 3600_000);
+      await registrarResposta(db, tenantId, { token, nivelSinal: nota, comentario: nota < 3 ? "Demorou para resolver." : null }, respondidaEm);
+    }
+  }
 }
 
 main()

@@ -99,3 +99,35 @@ export async function criarConvitePesquisa(
   }
   return token;
 }
+
+/** Página pública: dados do convite de pesquisa para exibir o formulário. */
+export async function buscarConvitePesquisa(db: DbDoTenant, token: string) {
+  if (!tokenValido(token)) return null;
+  return db.convitePesquisa.findUnique({
+    where: { tokenHash: hashToken(token) },
+    include: {
+      atendimento: {
+        select: {
+          tipo: true,
+          colaborador: { select: { nome: true } },
+          clienteFinal: { select: { naoPerturbe: true } },
+        },
+      },
+    },
+  });
+}
+
+/** LGPD: o cliente pede para não receber mais pesquisas deste provedor. */
+export async function descadastrarPesquisas(db: DbDoTenant, token: string, agora = new Date()) {
+  if (!tokenValido(token)) return false;
+  const convite = await db.convitePesquisa.findUnique({
+    where: { tokenHash: hashToken(token) },
+    select: { atendimento: { select: { clienteFinalId: true } } },
+  });
+  if (!convite) return false;
+  await db.clienteFinal.updateMany({
+    where: { id: convite.atendimento.clienteFinalId, naoPerturbe: false },
+    data: { naoPerturbe: true, naoPerturbeEm: agora },
+  });
+  return true;
+}

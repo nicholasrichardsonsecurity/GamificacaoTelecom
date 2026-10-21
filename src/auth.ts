@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { authConfig } from "./auth.config";
 import { prisma } from "./lib/db";
-import { dominioPlataforma, resolverHost } from "./lib/host";
+import { dominioPlataforma, hostDaRequisicao, resolverHost } from "./lib/host";
 import { buscarTenantPorHost } from "./lib/tenant";
 
 const credenciaisSchema = z.object({
@@ -30,7 +30,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const { email, senha } = dados.data;
 
         // O e-mail é único por tenant: o tenant vem do domínio acessado.
-        const ref = resolverHost(request.headers.get("host"), dominioPlataforma());
+        const ref = resolverHost(hostDaRequisicao(request.headers), dominioPlataforma());
         let tenantId: string | null;
         if (ref?.tipo === "plataforma") {
           tenantId = null;

@@ -180,6 +180,18 @@ describe.skipIf(!URL_TESTE)("fluxo de avaliação no banco", () => {
     expect(await revisarSuspeita(db, tenant.id, r.avaliacaoId, gestorId, true, inicio)).toBe(false);
   });
 
+  it("resposta segundos após o atendimento é suspeita só em convite automático", async () => {
+    const respostaRapida = async (canal: "WHATSAPP" | "MANUAL") => {
+      const at = await db.atendimento.create({
+        data: { tenantId: tenant.id, tipo: "SUPORTE", colaboradorId, clienteFinalId: clienteId, concluidoEm: inicio },
+      });
+      const token = (await criarConvitePesquisa(db, tenant.id, at.id, canal, inicio))!;
+      return registrarResposta(db, tenant.id, { token, nivelSinal: 4 }, new Date(inicio.getTime() + 20_000));
+    };
+    expect(await respostaRapida("WHATSAPP")).toMatchObject({ ok: true, suspeita: true });
+    expect(await respostaRapida("MANUAL")).toMatchObject({ ok: true, suspeita: false });
+  });
+
   it("respeita o limite diário configurado", async () => {
     await db.configuracaoPontuacao.update({ where: { tenantId: tenant.id }, data: { limiteDiario: 15 } });
     const dia = new Date("2026-10-23T13:00:00Z");

@@ -1,4 +1,4 @@
-import type { OrigemCadastro, Role } from "@prisma/client";
+import { Prisma, type OrigemCadastro, type Role } from "@prisma/client";
 import { z } from "zod";
 import type { DbDoTenant } from "./tenant-db";
 
@@ -238,4 +238,50 @@ export async function upsertColaboradores(
     }
   }
   return resultado;
+}
+
+// ─── Cadastro manual ────────────────────────────────────────────────────────
+
+export const usuarioSchema = z.object({
+  nome: z.string().trim().min(2, "Informe o nome.").max(120),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(200)
+    .transform((v) => v || null)
+    .pipe(z.email("E-mail inválido.").nullable()),
+  role: z.enum(PAPEIS_DO_TENANT),
+  equipeId: z
+    .string()
+    .transform((v) => v || null)
+    .nullable(),
+  ativo: z.boolean(),
+});
+
+export type DadosUsuario = z.infer<typeof usuarioSchema>;
+
+/** Cria (id nulo) ou edita um usuário do tenant, respeitando o limite do plano. */
+export async function salvarUsuario(db: DbDoTenant, tenantId: string, id: string | null, dados: DadosUsuario) {
+  const atual = id ? await db.usuario.findFirst({ where: { id } }) : null;
+  if (id && !atual) throw new Error("Usuário não encontrado.");
+  if (dados.equipeId && !(await db.equipe.findFirst({ where: { id: dados.equipeId } }))) {
+    throw new Error("Equipe não encontrada.");
+  }
+  if (dados.ativo && !atual?.ativo) {
+    const limites = await limitesDoPlano(db, tenantId);
+    if (limites.limiteColaboradores !== null && limites.usuarios >= limites.limiteColaboradores) {
+      throw new Error(`Limite de ${limites.limiteColaboradores} usuários ativos do plano atingido.`);
+    }
+  }
+  try {
+    return atual
+      ? await db.usuario.update({ where: { id: atual.id }, data: dados })
+      : await db.usuario.create({ data: { ...dados, tenantId } });
+  } catch (erro) {
+    if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") {
+      throw new Error("Já existe um usuário com este e-mail.");
+    }
+    throw erro;
+  }
 }

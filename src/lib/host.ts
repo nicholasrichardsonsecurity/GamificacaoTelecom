@@ -11,7 +11,7 @@ export type ReferenciaHost =
   | { tipo: "subdominio"; slug: string }
   | { tipo: "customizado"; dominio: string };
 
-const SLUG_VALIDO = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+export const SLUG_VALIDO = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 /** Remove porta, ponto final e normaliza para minúsculas. */
 export function normalizarHost(host: string): string {
@@ -44,6 +44,17 @@ export function resolverHost(
   }
 
   return { tipo: "customizado", dominio: h };
+}
+
+/**
+ * Host da requisição. `X-Forwarded-Host` vem primeiro porque, depois de uma
+ * Server Action com `redirect()`, o Next renderiza o destino com um `fetch`
+ * interno para `localhost` que perde o `Host` original mas mantém esse header.
+ * Em produção o Nginx sobrescreve `X-Forwarded-Host` com `$host`
+ * (docs/04-DEPLOY-DEBIAN.md), então o cliente não consegue forjá-lo.
+ */
+export function hostDaRequisicao(headers: Pick<Headers, "get">): string | null {
+  return headers.get("x-forwarded-host")?.split(",")[0]?.trim() || headers.get("host");
 }
 
 export function dominioPlataforma(): string {

@@ -225,8 +225,11 @@ export async function registrarResposta(
       if (entrada.respondenteLogado) {
         motivos.push("Resposta enviada de um navegador com sessão de usuário do provedor");
       }
+      // Só vale para convites enviados automaticamente (ERP + WhatsApp/SMS/e-mail):
+      // no registro manual, quem gera e envia o link é o admin, e o cliente
+      // responder logo em seguida é o esperado.
       const segundos = (agora.getTime() - convite.atendimento.concluidoEm.getTime()) / 1000;
-      if (segundos < RESPOSTA_RAPIDA_SEGUNDOS) {
+      if (convite.canal !== "MANUAL" && segundos < RESPOSTA_RAPIDA_SEGUNDOS) {
         motivos.push("Respondida menos de 1 minuto após a conclusão do atendimento");
       }
 
@@ -328,6 +331,9 @@ export async function abrirContestacao(
     throw new Error("Só avaliações de até 3 barras podem ser contestadas.");
   }
   if (avaliacao.contestacao) throw new Error("Esta avaliação já foi contestada.");
+  if (avaliacao.suspeita && avaliacao.suspeitaAceita !== true) {
+    throw new Error("Esta avaliação está em revisão e ainda não conta pontos.");
+  }
   return db.contestacaoAvaliacao.create({
     data: { tenantId, avaliacaoId, colaboradorId, justificativa: texto.slice(0, 2000) },
   });

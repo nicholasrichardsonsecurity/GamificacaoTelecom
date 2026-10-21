@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "./auth.config";
-import { dominioPlataforma, resolverHost } from "./lib/host";
+import { dominioPlataforma, hostDaRequisicao, resolverHost } from "./lib/host";
 import { decidirAcesso, rotaInicial } from "./lib/rbac";
 
 const { auth } = NextAuth(authConfig);
@@ -12,7 +12,7 @@ const { auth } = NextAuth(authConfig);
  * A existência do tenant e o branding são resolvidos no servidor (`lib/tenant.ts`).
  */
 export default auth((req) => {
-  const host = resolverHost(req.headers.get("host"), dominioPlataforma());
+  const host = resolverHost(hostDaRequisicao(req.headers), dominioPlataforma());
   const role = req.auth?.user?.role;
   const { pathname, search } = req.nextUrl;
 
