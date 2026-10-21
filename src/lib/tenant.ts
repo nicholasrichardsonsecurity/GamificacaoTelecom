@@ -3,7 +3,7 @@ import { cache } from "react";
 import { headers } from "next/headers";
 import type { Tenant } from "@prisma/client";
 import { prisma } from "./db";
-import { dominioPlataforma, resolverHost, type ReferenciaHost } from "./host";
+import { dominioPlataforma, hostDaRequisicao, resolverHost, type ReferenciaHost } from "./host";
 import {
   COR_PRIMARIA_PADRAO,
   COR_SECUNDARIA_PADRAO,
@@ -30,14 +30,14 @@ export async function buscarTenantPorHost(ref: ReferenciaHost | null): Promise<T
 /** Tenant da requisição atual, resolvido pelo `Host` (uma consulta por request). */
 export const contextoAtual = cache(async (): Promise<ContextoHost> => {
   const h = await headers();
-  const ref = resolverHost(h.get("host"), dominioPlataforma());
+  const ref = resolverHost(hostDaRequisicao(h), dominioPlataforma());
   if (ref?.tipo === "plataforma") return { tipo: "plataforma", tenant: null };
   const tenant = await buscarTenantPorHost(ref);
   return tenant ? { tipo: "tenant", tenant } : { tipo: "desconhecido", tenant: null };
 });
 
 export function nomePlataforma(): string {
-  return process.env.PLATAFORMA_NOME ?? "SinalPlus";
+  return process.env.PLATAFORMA_NOME ?? "SinalPlus Telecom";
 }
 
 export function brandingDo(contexto: ContextoHost): Branding {

@@ -15,7 +15,8 @@ nesta ordem antes de qualquer código ser escrito (todos ficam em `docs/`):
 
 ## Projeto
 
-**Nome provisório:** SinalPlus — SaaS de gamificação para provedores de
+**Nome do produto:** SinalPlus Telecom (código e identificadores técnicos
+continuam como `sinalplus`) — SaaS de gamificação para provedores de
 internet, começando pela bonificação de colaboradores por feedback de
 pós-venda (escala de "sinal de Wi-Fi" de 1 a 5, pontos, níveis, selos e
 resgate de prêmios com foto). **White-label desde o MVP**: cada provedor
@@ -105,37 +106,49 @@ avançada.
 > - Na Fase 2, a consulta periódica é o caminho principal; webhook é opcional.
 
 ### Fase 1 — Núcleo de negócio (MVP)
-- [ ] CRUD de `Tenant` (via Super Admin), incluindo campos de marca, e
+- [x] CRUD de `Tenant` (via Super Admin), incluindo campos de marca, e
       onboarding básico de um provedor, já copiando o template padrão de
       regras, níveis, selos e `ConfiguracaoPontuacao`.
-- [ ] Script para criar o primeiro `SUPER_ADMIN` de produção com senha
+- [x] Script para criar o primeiro `SUPER_ADMIN` de produção com senha
       própria (o seed é só para desenvolvimento).
-- [ ] Tela de branding para o Admin do Provedor (upload de logo, escolha de
+- [x] Tela de branding para o Admin do Provedor (upload de logo, escolha de
       cores, nome de exibição).
-- [ ] CRUD de `Usuario`/`Equipe` dentro de um tenant (Admin do Provedor),
+- [x] CRUD de `Usuario`/`Equipe` dentro de um tenant (Admin do Provedor),
       com cadastro manual funcionando desde já (independente da integração
       de ERP da Fase 2), respeitando os limites do plano.
-- [ ] Importação de colaboradores por planilha (CSV), com *upsert* por
+- [x] Importação de colaboradores por planilha (CSV), com *upsert* por
       e-mail ou `idExternoERP` — garantia para provedores sem integração.
-- [ ] Convite de primeiro acesso (`ConviteAcesso`) para colaboradores sem
+- [x] Convite de primeiro acesso (`ConviteAcesso`) para colaboradores sem
       senha.
-- [ ] CRUD de `RegraPontuacao` e tela de `ConfiguracaoPontuacao` por tenant.
-- [ ] Criação de `Atendimento` (manual, via formulário admin, para o MVP
+- [x] CRUD de `RegraPontuacao` e tela de `ConfiguracaoPontuacao` por tenant.
+- [x] Criação de `Atendimento` (manual, via formulário admin, para o MVP
       funcionar sem integração externa ainda).
-- [ ] Geração do `ConvitePesquisa` (link com token e expiração) e página
+- [x] Geração do `ConvitePesquisa` (link com token e expiração) e página
       pública `/avaliar/[token]` com a UI de "sinal de Wi-Fi" (1 a 5
       barras), já usando o branding do tenant, registrando os sinais
       antifraude e com opção "não quero mais receber pesquisas".
-- [ ] Motor de pontuação (`lib/pontuacao.ts`): calcular e gravar
+- [x] Motor de pontuação (`lib/pontuacao.ts`): calcular e gravar
       `TransacaoPontos` ao receber uma `Avaliacao`, com pendência, limites,
       piso no débito e avaliação suspeita indo para revisão.
-- [ ] Abertura automática de `CasoRecuperacao` para notas baixas.
-- [ ] Contestação de avaliação pelo colaborador e decisão do gestor.
-- [ ] Painel do colaborador: saldo disponível e pendente, extrato, nível
+- [x] Abertura automática de `CasoRecuperacao` para notas baixas.
+- [x] Contestação de avaliação pelo colaborador e decisão do gestor.
+- [x] Painel do colaborador: saldo disponível e pendente, extrato, nível
       atual, selos.
-- [ ] Ranking por equipe/tenant/período.
-- [ ] Relatório de satisfação (CSAT) para o provedor: média de sinal e taxa
+- [x] Ranking por equipe/tenant/período.
+- [x] Relatório de satisfação (CSAT) para o provedor: média de sinal e taxa
       de resposta por tipo de atendimento, equipe e período.
+
+> **Decisões tomadas na Fase 1**:
+> - Mutações de tela usam Server Actions que voltam com `?ok=`/`?erro=`
+>   (`src/lib/acoes.ts`). O host vem de `hostDaRequisicao` (X-Forwarded-Host
+>   primeiro): depois de um `redirect()` em Server Action o Next renderiza o
+>   destino com um fetch interno que perde o `Host`. O Nginx precisa sobrescrever
+>   `X-Forwarded-Host` (docs/04).
+> - Regras de pontuação são versionadas (`ativaAte` na antiga + nova linha).
+> - A resposta "rápida demais" só marca suspeita em convite automático; no
+>   registro manual quem envia o link é o admin.
+> - Avaliação suspeita não pode ser contestada antes da revisão do gestor.
+> - Uploads ficam em `UPLOADS_DIR`; o tipo é checado pelos bytes e SVG é recusado.
 
 ### Fase 2 — Conectores de ERP: IXC e SGP (prioridade)
 - [ ] Definir a interface `ConectorERP` (`src/lib/erp-connectors/types.ts`).
@@ -163,6 +176,14 @@ avançada.
       entregue, com baixa de estoque e débito em `TransacaoPontos`.
 - [ ] Extrato completo de pontos por colaborador (créditos, débitos,
       resgates).
+- [ ] Prêmios de campanha por posição no ranking (ex.: "1º do mês ganha X"):
+      criados pelo provedor quando quiser, não fixos, e entregues fora do
+      catálogo de pontos.
+
+> **Decisão do usuário (21/10/2026)**: o catálogo de prêmios é por pontos
+> (o provedor cadastra o que tem para trocar, com custo, estoque e fotos).
+> O ranking não libera prêmio do catálogo; prêmio por posição é só
+> campanha avulsa do provedor.
 
 ### Fase 4 — Notificações e automação
 - [ ] Worker BullMQ para disparo assíncrono da pesquisa de satisfação
@@ -186,20 +207,32 @@ avançada.
 - [ ] Seguir `docs/04-DEPLOY-DEBIAN.md` para subir em produção.
 - [ ] Configurar backups automáticos (Postgres + uploads).
 
-## O que perguntar ao usuário antes de prosseguir (se não estiver claro)
+## Respostas do usuário às pendências (21/10/2026)
 
-- Nome final do produto/marca (este documento usa "SinalPlus" como
-  provisório para a plataforma — cada tenant terá seu próprio nome de
-  exibição).
-- Documentação/credenciais de API do **IXC** e do **SGP** disponíveis para
-  implementar os conectores da Fase 2 (endpoints reais, autenticação,
-  limites de taxa).
-- Provedor(es) de WhatsApp/SMS/e-mail que já estão disponíveis para uso
-  (ex.: a mesma infraestrutura usada pelo cliente GigaNetPe/Opa!), para
-  decidir a implementação de `NotificadorWhatsApp` já na Fase 4.
-- Domínio que será usado em produção para a plataforma em si
-  (`*.sinalplus.com.br` ou equivalente), para configurar subdomínios de
-  tenant desde a Fase 0.
+- **Nome do produto**: SinalPlus Telecom. É o nome da plataforma
+  (`PLATAFORMA_NOME`); cada tenant continua com seu próprio nome de exibição.
+- **Domínio de produção**: um subdomínio do hub **Aplivora**
+  (`aplivora.com.br`); proposta `sinalplus.aplivora.com.br`, ainda a
+  confirmar. Tenants ficam em `{slug}.<PLATAFORMA_DOMINIO>`; nada no código
+  assume `sinalplus.com.br`.
+- **Servidor**: o Debian da Aplivora já roda outros produtos com **Caddy**
+  como proxy reverso (não Nginx). Deploy sem mexer nos outros serviços:
+  porta publicada só em `127.0.0.1`, verificar `docker ps`/`ss -lntp` antes,
+  `caddy validate` antes de `reload` (ver `docs/04-DEPLOY-DEBIAN.md`).
+- **Cobrança**: quando o SinalPlus Telecom for cobrado, passa pelo
+  **Aplivora Billing Hub** (nunca direto no Asaas). Fora do escopo agora.
+- **E-mail**: Resend, usando a conta/domínio do Aplivora.
+- **SMS**: KingSMS.
+- **WhatsApp**: ainda sem API oficial. A abstração `NotificadorWhatsApp`
+  entra na Fase 4 com e-mail/SMS como canais ativos; o WhatsApp fica
+  plugável para quando houver provedor.
+- **APIs de ERP**: o usuário gera os acessos de teste do IXC (via GigaNetPe)
+  e do SGP seguindo a seção 6 de `docs/REFERENCIA-IXC-SGP.md`.
+
+## O que ainda perguntar ao usuário (se não estiver claro)
+
+- Endereço exato do domínio do Aplivora para a plataforma.
+- Provedor oficial de WhatsApp, quando houver.
 
 ## Fora de escopo nesta primeira leva (ver seção 14 de `docs/01-FUNDACAO-PRODUTO.md`)
 

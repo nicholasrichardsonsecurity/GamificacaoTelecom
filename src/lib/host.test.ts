@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizarHost, resolverHost } from "./host";
+import { hostDaRequisicao, normalizarHost, resolverHost } from "./host";
 
 const BASE = "sinalplus.com.br";
 
@@ -55,5 +55,13 @@ describe("resolverHost", () => {
 describe("normalizarHost", () => {
   it("preserva IPv6 literal", () => {
     expect(normalizarHost("[::1]:3000")).toBe("[::1]");
+  });
+});
+
+describe("hostDaRequisicao", () => {
+  it("prefere o X-Forwarded-Host (render interno do Next após redirect de Server Action)", () => {
+    const h = new Headers({ host: "localhost:3000", "x-forwarded-host": "demo.sinalplus.com.br, proxy" });
+    expect(hostDaRequisicao(h)).toBe("demo.sinalplus.com.br");
+    expect(hostDaRequisicao(new Headers({ host: "demo.localhost:3000" }))).toBe("demo.localhost:3000");
   });
 });

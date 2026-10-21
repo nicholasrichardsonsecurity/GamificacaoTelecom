@@ -10,12 +10,12 @@ export const metadata: Metadata = { title: "Entrar" };
 export default async function PaginaLogin({
   searchParams,
 }: {
-  searchParams: Promise<{ callbackUrl?: string }>;
+  searchParams: Promise<{ callbackUrl?: string; senhaDefinida?: string }>;
 }) {
   const contexto = await contextoAtual();
   if (contexto.tipo === "desconhecido") notFound();
   const branding = brandingDo(contexto);
-  const { callbackUrl } = await searchParams;
+  const { callbackUrl, senhaDefinida } = await searchParams;
 
   return (
     <main className="bg-muted/40 flex min-h-svh items-center justify-center p-6">
@@ -31,7 +31,12 @@ export default async function PaginaLogin({
             </CardDescription>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="grid gap-4">
+          {senhaDefinida && (
+            <p role="status" className="border-primary/40 bg-primary/5 rounded-md border px-3 py-2 text-sm">
+              Senha definida. Agora é só entrar.
+            </p>
+          )}
           <FormLogin callbackUrl={callbackUrl} />
         </CardContent>
       </Card>

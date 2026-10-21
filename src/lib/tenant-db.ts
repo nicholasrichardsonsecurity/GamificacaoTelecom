@@ -94,3 +94,7 @@ export function dbDoTenant(tenantId: string, client: PrismaClient = prisma) {
 }
 
 export type DbDoTenant = ReturnType<typeof dbDoTenant>;
+
+type Funcao<T> = Extract<T, (...args: never[]) => unknown>;
+/** Client de uma transação interativa aberta com `dbDoTenant(...).$transaction`. */
+export type TxDoTenant = Parameters<Funcao<Parameters<DbDoTenant["$transaction"]>[0]>>[0];

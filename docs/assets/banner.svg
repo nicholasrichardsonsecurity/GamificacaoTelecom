@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-labelledby="t d">
-  <title id="t">SinalPlus</title>
+  <title id="t">SinalPlus Telecom</title>
   <desc id="d">Gamificação white-label para provedores de internet: feedback de pós-venda vira pontos, níveis e prêmios.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
@@ -28,7 +28,7 @@
   </g>
 
   <g font-family="'Segoe UI', Inter, Roboto, 'Helvetica Neue', Arial, sans-serif">
-    <text x="400" y="150" font-size="76" font-weight="800" fill="#f8fafc" letter-spacing="-1">Sinal<tspan fill="#22c55e">Plus</tspan></text>
+    <text x="400" y="150" font-size="76" font-weight="800" fill="#f8fafc" letter-spacing="-1">Sinal<tspan fill="#22c55e">Plus</tspan><tspan font-size="40" font-weight="600" fill="#94a3b8" dx="14">Telecom</tspan></text>
     <text x="404" y="200" font-size="26" fill="#cbd5e1">Gamificação white-label para provedores de internet</text>
     <text x="404" y="240" font-size="20" fill="#94a3b8">Feedback de pós-venda → pontos → níveis → prêmios · integração IXC e SGP</text>
   </g>

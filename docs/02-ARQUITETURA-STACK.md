@@ -24,7 +24,7 @@ desde o MVP.
 | Autenticação | **Auth.js (NextAuth v5)** com credenciais (e-mail/senha) + sessão JWT | Simples, sem dependência de serviço externo; cliente final não precisa de login (link assinado) |
 | Fila/jobs assíncronos | **BullMQ + Redis** | Envio de pesquisas (WhatsApp/SMS/e-mail), cálculo de pontos, notificações, sincronização com IXC/SGP — fora do ciclo de request |
 | Upload de imagens (prêmios/logos) | Armazenamento local em disco (`/var/www/sinalplus/uploads`) com `sharp` para resize/otimização | Evita custo de S3 no MVP; pode migrar para MinIO/S3-compatible depois sem mudar o schema |
-| Envio de mensagens | Provedor de WhatsApp Business API (ex.: já usado pelo cliente — Opa!) e/ou e-mail transacional (Resend/SMTP), configurável por tenant | Pesquisa de satisfação chega onde o cliente já está, com a cara do provedor |
+| Envio de mensagens | E-mail via Resend (conta do Aplivora) e SMS via KingSMS; WhatsApp plugável quando houver API oficial; configurável por tenant | Pesquisa de satisfação chega onde o cliente já está, com a cara do provedor |
 | Processo em produção | **PM2** (process manager para Node) | Reinício automático, logs, zero-downtime reload |
 | Proxy reverso / TLS | **Nginx** + **Certbot (Let's Encrypt)**, ou **Caddy** como alternativa | Nginx é o padrão de mercado; **Caddy** emite e renova HTTPS automaticamente por domínio (inclusive domínios próprios de cada tenant), o que simplifica bastante o white-label com domínio customizado — ver seção 4 |
 | Monitoramento básico | PM2 logs + `logrotate`; opcional: Uptime Kuma (self-host) | Observabilidade mínima viável sem custo extra |
@@ -228,14 +228,14 @@ interface ConectorERP {
 
 ## 8. Dependências externas desejadas (podem ser mockadas no MVP)
 
-- Provedor de envio de WhatsApp (ex.: API oficial, ou mesmo sistemas já em
-  uso pelo provedor, como Opa!) — abstrair atrás de uma interface
-  `NotificadorWhatsApp` para trocar o provider sem reescrever regra de
+- **E-mail**: Resend, com a conta/domínio do hub Aplivora (decidido em
+  out/2026). Remetente configurável por tenant (`emailRemetente`).
+- **SMS**: KingSMS (decidido em out/2026).
+- **WhatsApp**: ainda sem API oficial. Fica atrás da interface
+  `NotificadorWhatsApp` para plugar o provedor quando houver (API oficial
+  ou sistemas já em uso pelo provedor, como Opa!), sem reescrever regra de
   negócio. Configurável por tenant (cada provedor pode usar seu próprio
-  número/conta).
-- Serviço de e-mail transacional (Resend, Amazon SES ou SMTP do próprio
-  servidor via Postfix) como fallback, também configurável por tenant
-  (remetente com a marca do provedor).
+  número/conta). Até lá, a pesquisa sai por e-mail e SMS.
 - Credenciais de API do IXC/SGP de cada provedor cliente (obtidas no
   onboarding daquele tenant).
 

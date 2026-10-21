@@ -209,6 +209,7 @@ model Usuario {
   convitesAcesso        ConviteAcesso[]
   contestacoes          ContestacaoAvaliacao[] @relation("ContestacoesColaborador")
   contestacoesDecididas ContestacaoAvaliacao[] @relation("ContestacoesDecididasPor")
+  avaliacoesRevisadas   Avaliacao[]            @relation("AvaliacoesRevisadas")
 
   @@unique([tenantId, email])
   @@unique([tenantId, idExternoERP])
@@ -320,8 +321,13 @@ model Avaliacao {
   // Sinais antifraude: avaliação suspeita não pontua automaticamente.
   ipResposta        String?
   userAgentResposta String?
-  suspeita          Boolean @default(false)
+  suspeita          Boolean   @default(false)
   motivoSuspeita    String?
+  /// Revisão do gestor sobre uma avaliação suspeita: aceita (pontua) ou descartada.
+  revisadaEm        DateTime?
+  revisadaPorId     String?
+  revisadaPor       Usuario?  @relation("AvaliacoesRevisadas", fields: [revisadaPorId], references: [id])
+  suspeitaAceita    Boolean?
 
   transacao       TransacaoPontos?
   casoRecuperacao CasoRecuperacao?

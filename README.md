@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="SinalPlus — gamificação white-label para provedores de internet" width="100%">
+  <img src="docs/assets/banner.svg" alt="SinalPlus Telecom — gamificação white-label para provedores de internet" width="100%">
 </p>
 
 <p align="center">
   <a href="https://github.com/nicholasrichardsonsecurity/GamificacaoTelecom/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/nicholasrichardsonsecurity/GamificacaoTelecom/ci.yml?branch=main&style=flat-square&label=CI"></a>
-  <img alt="Status: Fase 1" src="https://img.shields.io/badge/status-fase%201%20%C2%B7%20MVP-f59e0b?style=flat-square">
+  <img alt="Status: Fase 1" src="https://img.shields.io/badge/status-fase%201%20%C2%B7%20MVP%20pronto-22c55e?style=flat-square">
   <img alt="Multi-tenant" src="https://img.shields.io/badge/multi--tenant-white--label-22c55e?style=flat-square">
   <img alt="Integrações" src="https://img.shields.io/badge/integra%C3%A7%C3%B5es-IXC%20%7C%20SGP-0ea5e9?style=flat-square">
   <img alt="Idioma" src="https://img.shields.io/badge/idioma-pt--BR-009c3b?style=flat-square">
@@ -28,7 +28,7 @@
 
 ## Sobre o projeto
 
-**SinalPlus** (nome provisório) é um SaaS de gamificação para provedores de
+**SinalPlus Telecom** é um SaaS de gamificação para provedores de
 internet (ISPs). Ele transforma o **feedback de pós-venda** em um programa de
 **pontos, níveis, selos e prêmios** para quem atende o cliente: técnicos de
 instalação, atendentes de suporte e vendedores.
@@ -156,7 +156,8 @@ A senha de todos os usuários de exemplo é `sinalplus123` (mude com `SEED_SENHA
 | `npm test` | Testes (Vitest). Os de isolamento no banco rodam com `TEST_DATABASE_URL` apontando para um banco descartável |
 | `npm run db:migrate` | Cria e aplica migrations em desenvolvimento |
 | `npm run db:deploy` | Aplica migrations em produção |
-| `npm run db:seed` | Planos, Super Admin e provedor de demonstração |
+| `npm run db:seed` | Planos, Super Admin e provedor de demonstração com algumas avaliações |
+| `npm run criar-super-admin -- --email voce@empresa.com.br` | Cria o Super Admin de produção (pede a senha no terminal) |
 
 ### Estrutura
 
@@ -167,8 +168,10 @@ prisma/
 └── seed.ts
 src/
 ├── app/
-│   ├── (auth)/login/      # login com a marca do provedor
+│   ├── (auth)/            # login e primeiro acesso, com a marca do provedor
 │   ├── (app)/             # área logada: superadmin, admin, gestor, colaborador
+│   ├── avaliar/[token]/   # pesquisa pública de "sinal de Wi-Fi" para o cliente
+│   ├── uploads/           # logos e favicons enviados
 │   └── api/auth/          # Auth.js
 ├── auth.ts / auth.config.ts
 ├── middleware.ts          # resolução de host + RBAC por área
@@ -179,7 +182,13 @@ src/
     ├── tenant-db.ts       # Prisma escopado por tenant (isolamento)
     ├── rbac.ts            # papéis e áreas
     ├── branding.ts        # cores da marca sanitizadas e contraste
-    └── crypto.ts          # credenciais de IXC/SGP cifradas (AES-256-GCM)
+    ├── crypto.ts          # credenciais de IXC/SGP cifradas (AES-256-GCM)
+    ├── pontuacao.ts       # motor de pontuação, antifraude, contestação
+    ├── saldo.ts           # saldo disponível/pendente e nível pelo ledger
+    ├── convites.ts        # links de primeiro acesso e de pesquisa (só o hash no banco)
+    ├── colaboradores.ts   # cadastro, planilha CSV e upsert idempotente
+    ├── regras.ts          # regras versionadas e configuração do motor
+    └── relatorios.ts      # ranking e satisfação (CSAT)
 ```
 
 ### Garantias da Fase 0
@@ -193,12 +202,27 @@ src/
 - **White-label sem marca fixa**: nome, logo, favicon e cores vêm do `Tenant`;
   cores passam por validação antes de virarem CSS.
 
+### O que a Fase 1 entrega
+
+- **Super Admin**: cria provedores já com regras, níveis, selos e configuração
+  padrão, e gera o link de primeiro acesso do admin.
+- **Admin do provedor**: marca (logo, favicon, cores), usuários e equipes com
+  limite do plano, importação por planilha, regras de pontuação versionadas,
+  atendimentos manuais e link da pesquisa.
+- **Pesquisa pública** `/avaliar/[token]`: escala de 1 a 5 barras com a marca
+  do provedor, comentário, opção de não receber mais pesquisas e sinais
+  antifraude (resposta de navegador logado ou segundos após o atendimento).
+- **Gestor**: casos de recuperação, contestações, avaliações suspeitas,
+  ranking e relatório de satisfação, vendo só as equipes que gerencia.
+- **Colaborador**: saldo disponível e pendente, nível, selos, extrato,
+  avaliações recebidas com contestação, e ranking.
+
 ## Roadmap
 
 | Fase | Entrega | Status |
 |:---:|---|:---:|
 | 0 | Fundação técnica: Next.js, Prisma, schema com white-label, Auth.js + RBAC, resolução de tenant | ✅ |
-| 1 | Núcleo de negócio (MVP): tenants, branding, usuários, regras, avaliação por sinal, motor de pontuação, ranking | 🚧 |
+| 1 | Núcleo de negócio (MVP): tenants, branding, usuários, regras, avaliação por sinal, motor de pontuação, ranking | ✅ |
 | 2 | Conectores de ERP IXC e SGP: sincronização periódica e webhooks | ⏳ |
 | 3 | Prêmios e resgate com fotos, aprovação e baixa de estoque | ⏳ |
 | 4 | Notificações (WhatsApp, e-mail, SMS) e campanhas de pontos | ⏳ |
