@@ -1,0 +1,198 @@
+# Referência: APIs dos Sistemas de Gestão de Provedores (IXC e SGP)
+
+> Documento de consulta permanente, para usar em **qualquer projeto** que
+> precise integrar com o **IXC Provedor** ou o **SGP (TSMX)** — não é
+> específico do SinalPlus. Reúne os links oficiais, o que já se sabe sobre
+> cada API a partir da documentação pública, e um checklist do que ainda
+> falta levantar antes de implementar uma integração real.
+>
+> Este documento é um **ponto de partida**, não a documentação completa —
+> os sites oficiais só expõem o índice/menu publicamente em alguns pontos;
+> o conteúdo técnico detalhado (parâmetros exatos, exemplos de JSON,
+> limites de taxa) precisa ser consultado diretamente nas páginas linkadas
+> abaixo, ou obtido com o provedor/fornecedor que já usa o sistema.
+
+---
+
+## 1. IXC Provedor
+
+### Links oficiais
+- Wiki da API: https://wikiapiprovedor.ixcsoft.com.br/
+- Documentação geral do ERP: https://wiki-erp.ixcsoft.com.br/documentacao/
+
+### O que a documentação pública mostra
+
+**Módulos do sistema** (cada um pode ter endpoints próprios na API):
+- Cadastros: clientes, contratos, produtos, fornecedores, estruturas
+- Operacional: compras (entradas), vendas/pedidos (saídas), contas a pagar
+  e a receber, fiscal, contabilidade, folha de pagamento, estoque
+- Provedor (específico de ISP): ONUs, logins de assinante, planos de
+  velocidade, OLTs, Radius, pools de IP, SpeedTest
+- Suporte: ordens de serviço, atendimentos, eventos
+- Inmap (mapeamento/geolocalização): Sales (viabilidade técnica), Service
+  (O.S. e rotas de técnico), Fiberdocs (documentação de fibra FTTH)
+- Outros: Hotsite, CRM, Frota, Plataforma VoIP, MVNO
+- Integrações nativas: e-mail SMTP, MVNO
+
+**Seção "Informações API"** (existe, mas conteúdo detalhado não acessível
+via scraping simples — precisa navegação manual):
+- Erros comuns
+- Configuração do webservice
+- Geração de token de acesso
+- Verificação de acesso à API
+- Configuração de acesso via Apache e via Nginx
+- "Recursos da API" (requisições com filtros específicos)
+
+**Erros HTTP conhecidos**: 400 (Bad Request), 401 (Authorization Required),
+404 (Not Found, no Nginx) — sugere API REST tradicional com autenticação
+por token.
+
+**Ecossistema de produtos IXC** (pode ter APIs/documentações próprias,
+relevante se o provedor cliente usar algum desses):
+- Opa! Suite (atendimento/CRM com Opa! IA)
+- IXC Assina (assinatura digital de contratos)
+- IXC ACS (gestão de equipamentos CPE)
+- IXC Oner, Olli, IXC Academy
+
+### Para o SinalPlus: o que precisamos confirmar antes de implementar
+
+- [ ] Formato de autenticação exato (token no header? Basic Auth? OAuth?) —
+      a wiki menciona "gerar token de acesso" mas o passo a passo não foi
+      capturado publicamente.
+- [ ] Endpoint exato para listar colaboradores/técnicos/atendentes
+      cadastrados (provavelmente dentro de "Cadastros", mas não confirmado).
+- [ ] Endpoint para consultar ordens de serviço concluídas (dentro de
+      "Suporte") e se há filtro por data/status/responsável.
+- [ ] Existência (ou não) de webhooks nativos para "O.S. concluída" — a
+      documentação pública não menciona webhooks; é possível que a
+      integração precise ser por **polling periódico** via API em vez de
+      evento em tempo real (confirmar com o provedor cliente, ex. GigaNetPe,
+      que já usa IXC).
+- [ ] Rate limits / limites de requisições por minuto.
+- [ ] Ambiente de homologação/sandbox disponível (não identificado
+      publicamente para o IXC — diferente do SGP, que tem sandbox claro).
+
+---
+
+## 2. SGP (TSMX)
+
+### Links oficiais
+- Wiki/Books gerais: https://bookstack.sgp.net.br/books
+- Book "API" (índice): https://bookstack.sgp.net.br/books/api
+- Página para desenvolvedores (sandbox, credenciais, suporte):
+  https://www.tsmx.net.br/developers
+- Documentação de referência completa da API: **api.sgp.net.br** (citada
+  na página de desenvolvedores, não explorada diretamente ainda)
+- Coleção Postman com todos os endpoints:
+  https://documenter.getpostman.com/view/6682240/2sB34hHg2V
+
+### O que a documentação pública mostra
+
+**Métodos de autenticação da API** (confirmados):
+1. **Basic** — usuário e senha do SGP (os mesmos de login no painel).
+2. **Token** — gerado no painel admin do SGP, na seção de ferramentas.
+3. **CPF/CNPJ + senha da Central do Assinante** — usado para autenticar o
+   **cliente final** (não um admin/integração), dados que ficam no
+   contrato de prestação de serviço do assinante.
+
+**Endpoints conhecidos** (extraídos da página de desenvolvedores — lista
+parcial, não exaustiva):
+
+| Método | Endpoint | Função |
+|---|---|---|
+| GET | `/api/ura/clientes/` | Consulta dados do cliente |
+| GET | `/api/ura/fatura2via/` | Gera a 2ª via de fatura |
+| GET | `/api/ura/titulos/` | Lista os títulos (financeiro) do cliente |
+| GET | `/api/os/list/` | Lista ordens de serviço |
+| POST | `/api/ura/chamado/` | Abre chamado (via URA) |
+| PUT | `/api/os/update/id/{os_id}/` | Atualiza uma ordem de serviço |
+
+> O padrão de URL (`/api/os/...`) sugere que existem outros recursos sob o
+> mesmo prefixo (ex.: criação de O.S., consulta por técnico responsável) —
+> confirmar na coleção do Postman linkada acima.
+
+**Ambiente de testes (sandbox)**:
+- Existe um ambiente de demonstração separado da produção, em
+  `demo.sgp.net.br`, com dados fictícios.
+- Simula PIX, boleto e cartão, e emissão de nota fiscal em modo teste —
+  ótimo para testar o fluxo de sincronização sem mexer em dados reais de
+  um provedor cliente.
+- Credenciais de demonstração disponíveis na própria página de
+  desenvolvedores; também é possível gerar credenciais via API.
+
+**Books relevantes no wiki** (além de "API"), que podem ter informação útil
+para a integração:
+- Autenticando Clientes
+- Clientes
+- Contratos
+- Atendimento
+- Aplicativo do Técnico (pode revelar como o SGP já representa
+  tecnicos/colaboradores internamente)
+- Gateways de Cartão de Crédito / Carteiras Bancárias (não relevante para
+  o SinalPlus, mas existe caso surja necessidade de cobrança)
+
+**Suporte técnico do fornecedor**: e-mail
+`desenvolvimento@sgp.net.br`, WhatsApp, atendimento seg-sex 8h-18h — útil
+para esclarecer dúvidas de implementação direto com a TSMX.
+
+### Para o SinalPlus: o que precisamos confirmar antes de implementar
+
+- [ ] Explorar a **coleção do Postman** (link acima) endpoint por endpoint
+      — é a fonte mais completa e estruturada encontrada até agora.
+- [ ] Confirmar se existe endpoint específico para **listar colaboradores/
+      usuários internos do provedor** (os endpoints encontrados são
+      focados em cliente final e O.S., não em colaboradores) — os
+      endpoints acima (`/api/ura/*`) parecem voltados à URA/autoatendimento
+      do assinante, não à gestão interna de equipe.
+- [ ] Testar autenticação por **Token** no ambiente sandbox
+      (`demo.sgp.net.br`) antes de qualquer integração real.
+- [ ] Confirmar existência (ou não) de webhooks para eventos de O.S.
+      concluída — não identificado na documentação pública; pode ser
+      necessário usar `GET /api/os/list/` com polling periódico e filtro
+      por data/status.
+- [ ] Rate limits da API.
+
+---
+
+## 3. Comparativo rápido (o que já dá pra concluir)
+
+| Aspecto | IXC | SGP |
+|---|---|---|
+| Autenticação | Token (mecanismo exato não confirmado publicamente) | Basic, Token, ou CPF/CNPJ+senha (para cliente final) |
+| Sandbox/homologação | Não identificado publicamente | Sim — `demo.sgp.net.br`, com dados fictícios |
+| Documentação centralizada de endpoints | Dispersa em wiki (menu), sem corpo de página capturável publicamente | Coleção Postman dedicada (mais fácil de explorar) |
+| Endpoints de O.S. confirmados | Não (módulo "Suporte" existe, endpoints não confirmados) | Sim: `GET /api/os/list/`, `PUT /api/os/update/id/{id}/` |
+| Endpoints de colaboradores/equipe confirmados | Não | Não confirmado — endpoints encontrados são voltados ao cliente final/URA |
+| Webhooks nativos | Não identificado | Não identificado |
+| Suporte ao desenvolvedor | Não identificado um canal direto | E-mail e WhatsApp dedicados (`desenvolvimento@sgp.net.br`) |
+
+## 4. Próximos passos recomendados (quando for implementar de verdade)
+
+1. **Para o SGP**: comece pelo sandbox (`demo.sgp.net.br`) e pela coleção
+   do Postman — é o caminho mais rápido para um protótipo funcional, já
+   que há ambiente de teste pronto.
+2. **Para o IXC**: como a GigaNetPe (cliente já documentado em outros
+   projetos) usa IXC, o caminho mais rápido é **pedir ao próprio provedor
+   acesso de API de homologação/teste** e a documentação completa da
+   seção "Informações API" da wiki, em vez de depender só do conteúdo
+   público indexável.
+3. Em ambos os casos, **validar primeiro se existe algum endpoint — ou
+   relatório exportável — que liste tecnicamente "colaboradores/usuários
+   internos do sistema"**, já que essa é a necessidade central do conector
+   descrito no `02-ARQUITETURA-STACK.md` do SinalPlus (seção 7,
+   `ConectorERP`). Os endpoints públicos encontrados até agora são mais
+   voltados a cliente final (URA) e O.S. do que a colaboradores.
+4. Manter as credenciais de API de cada provedor cliente sempre
+   criptografadas em repouso (já é requisito definido no
+   `02-ARQUITETURA-STACK.md`, seção 9).
+
+## 5. Como usar este documento em outros projetos
+
+Este arquivo não depende do SinalPlus — qualquer projeto futuro que precise
+ler dados de um provedor de internet que use IXC ou SGP pode partir direto
+daqui. Ao começar uma nova integração:
+1. Releia este documento.
+2. Marque os itens do checklist que já foram confirmados naquele projeto
+   específico (credenciais obtidas, endpoints testados).
+3. Atualize este arquivo com o que for descoberto de novo — ele é
+   cumulativo entre projetos.
