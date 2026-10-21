@@ -13,6 +13,10 @@ describe("conectores de ERP", () => {
     expect(() => normalizarUrlBase("ftp://x")).toThrow(ErroConectorERP);
     expect(() => normalizarUrlBase("https://u:p@x.com")).toThrow(ErroConectorERP);
     expect(() => normalizarUrlBase("nao é url")).toThrow(ErroConectorERP);
+    for (const interno of ["http://localhost:3000", "http://127.0.0.1", "http://10.0.0.5", "http://192.168.1.1", "http://169.254.169.254", "http://172.20.0.1", "http://[::1]"]) {
+      expect(() => normalizarUrlBase(interno), interno).toThrow(ErroConectorERP);
+    }
+    expect(normalizarUrlBase("https://172.32.0.1")).toBe("https://172.32.0.1");
   });
 
   it("classifica o tipo pelo texto do assunto", () => {

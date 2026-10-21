@@ -131,13 +131,13 @@ export async function sincronizarIntegracao(
 
     await db.integracaoERP.update({
       where: { id: integracao.id },
-      data: { ultimaSincronizacaoEm: agora, ultimoStatusSincronizacao: "SUCESSO" },
+      data: { ultimaSincronizacaoEm: agora, ultimaTentativaEm: agora, ultimoStatusSincronizacao: "SUCESSO" },
     });
     return r;
   } catch (erro) {
     await db.integracaoERP.update({
       where: { id: integracao.id },
-      data: { ultimoStatusSincronizacao: "ERRO" },
+      data: { ultimaTentativaEm: agora, ultimoStatusSincronizacao: "ERRO" },
     });
     throw erro instanceof ErroConectorERP ? erro : new ErroConectorERP("Falha na sincronização.", erro);
   }
