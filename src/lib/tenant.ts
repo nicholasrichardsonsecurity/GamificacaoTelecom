@@ -37,7 +37,7 @@ export const contextoAtual = cache(async (): Promise<ContextoHost> => {
 });
 
 export function nomePlataforma(): string {
-  return process.env.PLATAFORMA_NOME ?? "SinalPlus";
+  return process.env.PLATAFORMA_NOME ?? "SinalPlus Telecom";
 }
 
 export function brandingDo(contexto: ContextoHost): Branding {

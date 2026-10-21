@@ -1,4 +1,4 @@
-# Fundação do Produto — SinalPlus (nome provisório)
+# Fundação do Produto — SinalPlus Telecom
 
 > SaaS de gamificação para provedores de internet (ISPs), focado em transformar o
 > feedback de pós-venda em um programa de pontos, níveis e prêmios para os

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="SinalPlus — gamificação white-label para provedores de internet" width="100%">
+  <img src="docs/assets/banner.svg" alt="SinalPlus Telecom — gamificação white-label para provedores de internet" width="100%">
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 ## Sobre o projeto
 
-**SinalPlus** (nome provisório) é um SaaS de gamificação para provedores de
+**SinalPlus Telecom** é um SaaS de gamificação para provedores de
 internet (ISPs). Ele transforma o **feedback de pós-venda** em um programa de
 **pontos, níveis, selos e prêmios** para quem atende o cliente: técnicos de
 instalação, atendentes de suporte e vendedores.

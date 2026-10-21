@@ -15,7 +15,8 @@ nesta ordem antes de qualquer código ser escrito (todos ficam em `docs/`):
 
 ## Projeto
 
-**Nome provisório:** SinalPlus — SaaS de gamificação para provedores de
+**Nome do produto:** SinalPlus Telecom (código e identificadores técnicos
+continuam como `sinalplus`) — SaaS de gamificação para provedores de
 internet, começando pela bonificação de colaboradores por feedback de
 pós-venda (escala de "sinal de Wi-Fi" de 1 a 5, pontos, níveis, selos e
 resgate de prêmios com foto). **White-label desde o MVP**: cada provedor
@@ -186,20 +187,25 @@ avançada.
 - [ ] Seguir `docs/04-DEPLOY-DEBIAN.md` para subir em produção.
 - [ ] Configurar backups automáticos (Postgres + uploads).
 
-## O que perguntar ao usuário antes de prosseguir (se não estiver claro)
+## Respostas do usuário às pendências (21/10/2026)
 
-- Nome final do produto/marca (este documento usa "SinalPlus" como
-  provisório para a plataforma — cada tenant terá seu próprio nome de
-  exibição).
-- Documentação/credenciais de API do **IXC** e do **SGP** disponíveis para
-  implementar os conectores da Fase 2 (endpoints reais, autenticação,
-  limites de taxa).
-- Provedor(es) de WhatsApp/SMS/e-mail que já estão disponíveis para uso
-  (ex.: a mesma infraestrutura usada pelo cliente GigaNetPe/Opa!), para
-  decidir a implementação de `NotificadorWhatsApp` já na Fase 4.
-- Domínio que será usado em produção para a plataforma em si
-  (`*.sinalplus.com.br` ou equivalente), para configurar subdomínios de
-  tenant desde a Fase 0.
+- **Nome do produto**: SinalPlus Telecom. É o nome da plataforma
+  (`PLATAFORMA_NOME`); cada tenant continua com seu próprio nome de exibição.
+- **Domínio de produção**: um domínio do hub **Aplivora** (endereço exato a
+  confirmar). Tenants ficam em `{slug}.<PLATAFORMA_DOMINIO>`; nada no código
+  assume `sinalplus.com.br`.
+- **E-mail**: Resend, usando a conta/domínio do Aplivora.
+- **SMS**: KingSMS.
+- **WhatsApp**: ainda sem API oficial. A abstração `NotificadorWhatsApp`
+  entra na Fase 4 com e-mail/SMS como canais ativos; o WhatsApp fica
+  plugável para quando houver provedor.
+- **APIs de ERP**: o usuário gera os acessos de teste do IXC (via GigaNetPe)
+  e do SGP seguindo a seção 6 de `docs/REFERENCIA-IXC-SGP.md`.
+
+## O que ainda perguntar ao usuário (se não estiver claro)
+
+- Endereço exato do domínio do Aplivora para a plataforma.
+- Provedor oficial de WhatsApp, quando houver.
 
 ## Fora de escopo nesta primeira leva (ver seção 14 de `docs/01-FUNDACAO-PRODUTO.md`)
 

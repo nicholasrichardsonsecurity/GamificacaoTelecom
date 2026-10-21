@@ -196,3 +196,73 @@ daqui. Ao começar uma nova integração:
    específico (credenciais obtidas, endpoints testados).
 3. Atualize este arquivo com o que for descoberto de novo — ele é
    cumulativo entre projetos.
+
+## 6. Como gerar o acesso de teste (passo a passo)
+
+Para a Fase 2 do SinalPlus Telecom precisamos de um acesso **somente
+leitura** em cada sistema. O conector só lê colaboradores, clientes e O.S.;
+nunca grava nada no ERP do provedor.
+
+### IXC Provedor (no sistema da GigaNetPe)
+
+Fonte: [Como gerar um Token para integrações API](https://wiki-erp.ixcsoft.com.br/documentacao/guias-tutoriais/api/como-gerar-um-token-para-integracoes-api.html)
+(wiki oficial do IXC).
+
+1. **Crie um grupo só para a integração** em
+   **Configurações > Usuários > Grupo de usuários** (pode duplicar um grupo
+   existente e tirar o que não precisa). Dê a ele permissão **apenas de
+   leitura/consulta** em:
+   - Funcionários (tabela `funcionarios`) — técnicos, atendentes e vendedores;
+   - Ordens de serviço / chamados (tabela `su_oss_chamado`);
+   - Clientes (tabela `cliente`) — nome, telefone e e-mail para a pesquisa;
+   - Filiais (em **Configurações > Empresa > Filiais**) — anote também o
+     **ID da filial**, que o IXC exige desde a versão 79.28.8.
+2. Na seção **Permissão de login** desse grupo, campo **Redes permitidas**,
+   o IXC pode restringir por IP. Se a GigaNetPe exigir, peça o IP de onde os
+   testes vão rodar antes de liberar (em produção será o IP do servidor do
+   SinalPlus Telecom).
+3. **Crie um usuário exclusivo** para a integração em
+   **Configurações > Usuários > Usuário > Novo** (ex.: `api-sinalplus`), no
+   grupo do passo 1. Usuário exclusivo deixa claro nos logs do IXC o que foi
+   feito pela integração.
+4. Na seção **API** do usuário, marque **Permite acesso a API** e salve. O
+   token aparece no campo **Token de acesso** (em algumas versões o botão é
+   **Gerar token API**, na aba Webservice).
+5. Anote: **URL do IXC** (ex.: `https://ixc.giganetpe.com.br`), **ID numérico
+   do usuário** criado, **token** e **ID da filial**. A API fica em
+   `<URL>/webservice/v1/`.
+
+> Cuidado: o token é vinculado ao usuário. Se o e-mail ou a senha desse
+> usuário mudarem, o token muda junto.
+
+### SGP (TSMX)
+
+Fonte: [Autenticações via API](https://bookstack.sgp.net.br/books/api/page/autenticacoes-via-api)
+(BookStack oficial do SGP).
+
+- **Sandbox público**: `demo.sgp.net.br`, usuário `demo`, senha `demo`
+  (publicado na [página de desenvolvedores](https://www.tsmx.net.br/developers)).
+  Dá para começar os testes por ele sem pedir nada a ninguém.
+- **Token de um SGP real** (quando houver um provedor cliente com SGP):
+  1. No painel do SGP, vá em **Administração > Integrações > Tokens**.
+  2. Clique em **Adicionar Token**, dê um nome de identificação (ex.:
+     `sinalplus`) e defina ou crie o **App** (ex.: `sinalplus`).
+  3. Anote o **Token**, o nome do **App** e a **URL do SGP**. A autenticação
+     por Token + App é a recomendada pela TSMX; Token e App vão no corpo de
+     cada requisição.
+  4. Dúvidas de endpoint: `desenvolvimento@sgp.net.br` (suporte da TSMX).
+
+### Como entregar as credenciais
+
+Não cole tokens no chat. Cadastre-os como variáveis de ambiente do ambiente
+de nuvem do projeto (Configurações do projeto > Cloud environment > Add cloud
+environment), com estes nomes:
+
+| Variável | Conteúdo |
+|---|---|
+| `IXC_TESTE_URL` | URL do IXC da GigaNetPe |
+| `IXC_TESTE_USUARIO_ID` | ID numérico do usuário da API |
+| `IXC_TESTE_TOKEN` | token gerado no passo 4 |
+| `IXC_TESTE_FILIAL_ID` | ID da filial |
+| `SGP_TESTE_URL` | URL do SGP (para o sandbox: `https://demo.sgp.net.br`) |
+| `SGP_TESTE_TOKEN` / `SGP_TESTE_APP` | token e app (não precisa para o sandbox) |
