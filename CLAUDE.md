@@ -176,6 +176,14 @@ avançada.
       entregue, com baixa de estoque e débito em `TransacaoPontos`.
 - [ ] Extrato completo de pontos por colaborador (créditos, débitos,
       resgates).
+- [ ] Prêmios de campanha por posição no ranking (ex.: "1º do mês ganha X"):
+      criados pelo provedor quando quiser, não fixos, e entregues fora do
+      catálogo de pontos.
+
+> **Decisão do usuário (21/10/2026)**: o catálogo de prêmios é por pontos
+> (o provedor cadastra o que tem para trocar, com custo, estoque e fotos).
+> O ranking não libera prêmio do catálogo; prêmio por posição é só
+> campanha avulsa do provedor.
 
 ### Fase 4 — Notificações e automação
 - [ ] Worker BullMQ para disparo assíncrono da pesquisa de satisfação
