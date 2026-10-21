@@ -106,37 +106,49 @@ avançada.
 > - Na Fase 2, a consulta periódica é o caminho principal; webhook é opcional.
 
 ### Fase 1 — Núcleo de negócio (MVP)
-- [ ] CRUD de `Tenant` (via Super Admin), incluindo campos de marca, e
+- [x] CRUD de `Tenant` (via Super Admin), incluindo campos de marca, e
       onboarding básico de um provedor, já copiando o template padrão de
       regras, níveis, selos e `ConfiguracaoPontuacao`.
-- [ ] Script para criar o primeiro `SUPER_ADMIN` de produção com senha
+- [x] Script para criar o primeiro `SUPER_ADMIN` de produção com senha
       própria (o seed é só para desenvolvimento).
-- [ ] Tela de branding para o Admin do Provedor (upload de logo, escolha de
+- [x] Tela de branding para o Admin do Provedor (upload de logo, escolha de
       cores, nome de exibição).
-- [ ] CRUD de `Usuario`/`Equipe` dentro de um tenant (Admin do Provedor),
+- [x] CRUD de `Usuario`/`Equipe` dentro de um tenant (Admin do Provedor),
       com cadastro manual funcionando desde já (independente da integração
       de ERP da Fase 2), respeitando os limites do plano.
-- [ ] Importação de colaboradores por planilha (CSV), com *upsert* por
+- [x] Importação de colaboradores por planilha (CSV), com *upsert* por
       e-mail ou `idExternoERP` — garantia para provedores sem integração.
-- [ ] Convite de primeiro acesso (`ConviteAcesso`) para colaboradores sem
+- [x] Convite de primeiro acesso (`ConviteAcesso`) para colaboradores sem
       senha.
-- [ ] CRUD de `RegraPontuacao` e tela de `ConfiguracaoPontuacao` por tenant.
-- [ ] Criação de `Atendimento` (manual, via formulário admin, para o MVP
+- [x] CRUD de `RegraPontuacao` e tela de `ConfiguracaoPontuacao` por tenant.
+- [x] Criação de `Atendimento` (manual, via formulário admin, para o MVP
       funcionar sem integração externa ainda).
-- [ ] Geração do `ConvitePesquisa` (link com token e expiração) e página
+- [x] Geração do `ConvitePesquisa` (link com token e expiração) e página
       pública `/avaliar/[token]` com a UI de "sinal de Wi-Fi" (1 a 5
       barras), já usando o branding do tenant, registrando os sinais
       antifraude e com opção "não quero mais receber pesquisas".
-- [ ] Motor de pontuação (`lib/pontuacao.ts`): calcular e gravar
+- [x] Motor de pontuação (`lib/pontuacao.ts`): calcular e gravar
       `TransacaoPontos` ao receber uma `Avaliacao`, com pendência, limites,
       piso no débito e avaliação suspeita indo para revisão.
-- [ ] Abertura automática de `CasoRecuperacao` para notas baixas.
-- [ ] Contestação de avaliação pelo colaborador e decisão do gestor.
-- [ ] Painel do colaborador: saldo disponível e pendente, extrato, nível
+- [x] Abertura automática de `CasoRecuperacao` para notas baixas.
+- [x] Contestação de avaliação pelo colaborador e decisão do gestor.
+- [x] Painel do colaborador: saldo disponível e pendente, extrato, nível
       atual, selos.
-- [ ] Ranking por equipe/tenant/período.
-- [ ] Relatório de satisfação (CSAT) para o provedor: média de sinal e taxa
+- [x] Ranking por equipe/tenant/período.
+- [x] Relatório de satisfação (CSAT) para o provedor: média de sinal e taxa
       de resposta por tipo de atendimento, equipe e período.
+
+> **Decisões tomadas na Fase 1**:
+> - Mutações de tela usam Server Actions que voltam com `?ok=`/`?erro=`
+>   (`src/lib/acoes.ts`). O host vem de `hostDaRequisicao` (X-Forwarded-Host
+>   primeiro): depois de um `redirect()` em Server Action o Next renderiza o
+>   destino com um fetch interno que perde o `Host`. O Nginx precisa sobrescrever
+>   `X-Forwarded-Host` (docs/04).
+> - Regras de pontuação são versionadas (`ativaAte` na antiga + nova linha).
+> - A resposta "rápida demais" só marca suspeita em convite automático; no
+>   registro manual quem envia o link é o admin.
+> - Avaliação suspeita não pode ser contestada antes da revisão do gestor.
+> - Uploads ficam em `UPLOADS_DIR`; o tipo é checado pelos bytes e SVG é recusado.
 
 ### Fase 2 — Conectores de ERP: IXC e SGP (prioridade)
 - [ ] Definir a interface `ConectorERP` (`src/lib/erp-connectors/types.ts`).

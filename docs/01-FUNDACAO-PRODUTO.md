@@ -294,7 +294,9 @@ bloqueio para o provedor começar a usar a plataforma.
 - **Antifraude na resposta**: registrar IP, navegador e horário da resposta;
   marcar como suspeita (sem pontuar automaticamente) a resposta vinda do
   mesmo IP/dispositivo de uma sessão do colaborador, ou respondida segundos
-  após o atendimento ser concluído. Complementa o "modo auditor".
+  após o atendimento ser concluído (só para pesquisas enviadas
+  automaticamente; no registro manual quem envia o link é o admin).
+  Complementa o "modo auditor".
 - **Relatório de satisfação (CSAT) para o provedor**: média de sinal e taxa
   de resposta por tipo de atendimento, equipe e período — o valor que o dono
   do provedor enxerga além da gamificação.

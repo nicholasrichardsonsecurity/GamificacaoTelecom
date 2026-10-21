@@ -90,11 +90,16 @@ Variáveis obrigatórias no `.env` de produção:
 | `PLATAFORMA_DOMINIO` | domínio da plataforma, ex.: `sinalplus.com.br` (tenants ficam em `{slug}.sinalplus.com.br`) |
 | `PLATAFORMA_NOME` | nome exibido só no domínio da plataforma |
 | `CREDENCIAIS_CHAVE` | `openssl rand -base64 32` — cifra as credenciais de IXC/SGP; **guarde fora do servidor**, sem ela as credenciais salvas não podem ser lidas |
+| `UPLOADS_DIR` | `/var/www/sinalplus/app/uploads` — logos, favicons e fotos de prêmio (entra no backup) |
 | `REDIS_URL` | `redis://localhost:6379` (a partir da Fase 2) |
 
 > Não rode `npm run db:seed` em produção: ele cria usuários de exemplo com
-> senha conhecida. O primeiro `SUPER_ADMIN` de produção deve ser criado com
-> senha própria (script de criação a ser adicionado na Fase 1).
+> senha conhecida. Crie o primeiro `SUPER_ADMIN` com senha própria (pedida no
+> terminal, mínimo de 12 caracteres; rodar de novo troca a senha):
+>
+> ```bash
+> npm run criar-super-admin -- --email voce@empresa.com.br --nome "Seu Nome"
+> ```
 
 ## 9. PM2 (gerenciador de processo)
 
@@ -116,12 +121,20 @@ server {
     listen 80;
     server_name sinalplus.com.br *.sinalplus.com.br;
 
+    # Opcional: imagens enviadas servidas direto do disco.
+    location /uploads/ {
+        alias /var/www/sinalplus/app/uploads/;
+        add_header X-Content-Type-Options nosniff;
+        expires 1y;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;   # obrigatório: o tenant é resolvido pelo Host
+        proxy_set_header X-Forwarded-Host $host;   # sobrescreve o que o cliente mandar
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;

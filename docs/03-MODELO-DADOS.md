@@ -106,7 +106,8 @@ Tenant (provedor — já carrega branding white-label e domínio customizado)
 - **Sinais antifraude** (registrados na resposta): `ipResposta`,
   `userAgentResposta`, `suspeita` (bool) e `motivoSuspeita` (nullable — ex.:
   resposta do mesmo IP/dispositivo de uma sessão do colaborador, ou
-  respondida poucos segundos após o atendimento ser concluído). Avaliação
+  respondida poucos segundos após o atendimento ser concluído, quando o
+  convite foi enviado automaticamente). Avaliação
   suspeita não pontua automaticamente; vai para revisão do gestor.
 
 ### ConfiguracaoPontuacao (1 por tenant)
