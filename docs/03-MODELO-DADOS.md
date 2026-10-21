@@ -14,9 +14,12 @@ Tenant (provedor — já carrega branding white-label e domínio customizado)
  │    └─ Equipe / Filial
  ├─ ClienteFinal
  ├─ Atendimento (ligado a Usuario responsável + ClienteFinal)
- │    └─ Avaliacao (1 avaliação por atendimento)
- │         └─ TransacaoPontos (0 ou 1, gerada pela avaliação)
- ├─ RegraPontuacao (configuração ativa do tenant)
+ │    └─ ConvitePesquisa (link enviado ao cliente, com expiração)
+ │         └─ Avaliacao (criada quando o cliente responde; 1 por atendimento)
+ │              ├─ TransacaoPontos (0 ou 1, gerada pela avaliação)
+ │              └─ ContestacaoAvaliacao (0 ou 1, aberta pelo colaborador)
+ ├─ ConfiguracaoPontuacao (limites, pendência, nível de risco, prazo — 1 por tenant)
+ ├─ RegraPontuacao (pontos por nível de sinal, versionada no tempo)
  ├─ CampanhaPontos (multiplicadores temporários)
  ├─ CasoRecuperacao (aberto quando avaliação é baixa)
  ├─ Premio
@@ -52,20 +55,32 @@ Tenant (provedor — já carrega branding white-label e domínio customizado)
   conector plugável descrito em `02-ARQUITETURA-STACK.md` (seção 7).
 
 ### Usuario
-- `id`, `tenantId`, `nome`, `email`, `senhaHash` (nullable — colaborador
-  sincronizado via ERP pode nunca precisar logar com senha própria, se o
-  acesso dele for apenas visualizar pontos via link), `role`
+- `id`, `tenantId` (nulo **apenas** para `SUPER_ADMIN`, garantido por CHECK
+  no banco), `nome`, `email`, `senhaHash` (nullable — colaborador
+  sincronizado via ERP ou cadastrado pelo admin começa sem senha e define a
+  sua pelo convite de primeiro acesso, ver `ConviteAcesso`), `role`
   (`SUPER_ADMIN | ADMIN_PROVEDOR | GESTOR | COLABORADOR`), `equipeId`
   (nullable), `avatarUrl`, `ativo`, `criadoEm`.
 - **Campos de sincronização com ERP**: `origemCadastro`
   (`MANUAL | IXC | SGP`), `idExternoERP` (nullable — id do colaborador no
   IXC/SGP, usado para *upsert* idempotente), `sincronizadoEm` (nullable).
 
+### ConviteAcesso
+- `id`, `tenantId`, `usuarioId`, `tokenHash` (só o hash do token vai para o
+  banco; o token em si só existe no link enviado), `tipo`
+  (`PRIMEIRO_ACESSO | REDEFINIR_SENHA`), `expiraEm`, `usadoEm` (nullable),
+  `criadoEm`.
+- Resolve o acesso de colaboradores que nunca tiveram senha (cadastro
+  manual, importação por planilha ou sincronização com IXC/SGP).
+
 ### Equipe (filial/time)
 - `id`, `tenantId`, `nome` (ex.: "Paulista", "Abreu e Lima"), `gestorId`.
 
 ### ClienteFinal
-- `id`, `tenantId`, `nome`, `telefone`, `email`, `criadoEm`.
+- `id`, `tenantId`, `nome`, `telefone`, `email`, `criadoEm`,
+  `idExternoERP` (nullable, id do assinante no IXC/SGP), `naoPerturbe`
+  (bool — o cliente pediu para não receber mais pesquisas; LGPD),
+  `naoPerturbeEm` (nullable).
 - Dado mínimo necessário só para disparar e identificar a pesquisa — não é
   um "usuário" do sistema (sem login).
 
@@ -75,10 +90,32 @@ Tenant (provedor — já carrega branding white-label e domínio customizado)
   `origemExternaId` (id do chamado/O.S. no ERP do provedor, para
   idempotência), `status` (`CONCLUIDO`), `concluidoEm`.
 
+### ConvitePesquisa
+- `id`, `tenantId`, `atendimentoId` (único — 1 convite por atendimento),
+  `tokenHash` (único; o token só existe no link enviado), `canal`
+  (`WHATSAPP | SMS | EMAIL | MANUAL`), `criadoEm`, `enviadoEm` (nullable),
+  `expiraEm`, `respondidoEm` (nullable).
+- Existe antes da resposta do cliente — é ele que materializa o "link
+  assinado com expiração". Também permite medir a taxa de resposta
+  (convites enviados × respondidos).
+
 ### Avaliacao
 - `id`, `tenantId`, `atendimentoId` (único — 1 avaliação por atendimento),
-  `nivelSinal` (1 a 5), `comentario` (nullable), `tokenAcesso` (link
-  assinado consumido), `respondidaEm`.
+  `conviteId` (único), `nivelSinal` (1 a 5), `comentario` (nullable),
+  `respondidaEm`.
+- **Sinais antifraude** (registrados na resposta): `ipResposta`,
+  `userAgentResposta`, `suspeita` (bool) e `motivoSuspeita` (nullable — ex.:
+  resposta do mesmo IP/dispositivo de uma sessão do colaborador, ou
+  respondida poucos segundos após o atendimento ser concluído). Avaliação
+  suspeita não pontua automaticamente; vai para revisão do gestor.
+
+### ConfiguracaoPontuacao (1 por tenant)
+- `id`, `tenantId` (único), `diasPendencia` (padrão 7 — créditos ficam
+  pendentes por esse período antes de virarem saldo gastável),
+  `limiteDiario` (nullable), `limiteSemanal` (nullable) — teto de pontos
+  **creditados** por colaborador no período, `nivelRisco` (padrão 2 — nota
+  menor ou igual abre `CasoRecuperacao`), `prazoContatoHoras` (padrão 24),
+  `atualizadoEm`.
 
 ### RegraPontuacao
 - `id`, `tenantId`, `nivelSinal` (1-5), `pontos` (pode ser negativo),
@@ -91,11 +128,24 @@ Tenant (provedor — já carrega branding white-label e domínio customizado)
 ### TransacaoPontos
 - `id`, `tenantId`, `colaboradorId`, `tipo`
   (`CREDITO_AVALIACAO | DEBITO_AVALIACAO | RESGATE | AJUSTE_MANUAL`),
-  `pontos` (delta, positivo ou negativo), `origemAvaliacaoId` (nullable),
-  `origemResgateId` (nullable), `criadoEm`, `criadoPorId` (para ajustes
-  manuais de admin, sempre auditado).
+  `pontos` (delta **efetivamente aplicado**, positivo ou negativo — já com
+  limites e piso em zero, ver seção 4), `pontosCalculados` (delta bruto que
+  a regra daria, para relatório), `disponivelEm` (a partir de quando o
+  crédito vira saldo gastável; débitos são imediatos),
+  `origemAvaliacaoId` (nullable), `origemResgateId` (nullable), `criadoEm`,
+  `criadoPorId` (para ajustes manuais de admin), `motivo` (texto,
+  **obrigatório** em `AJUSTE_MANUAL` — auditoria de "quem, quando e por
+  quê").
 - **Nunca editar/apagar** — saldo do colaborador é sempre a soma das
   transações (ledger imutável).
+
+### ContestacaoAvaliacao
+- `id`, `tenantId`, `avaliacaoId` (único), `colaboradorId`, `justificativa`,
+  `status` (`ABERTA | ACEITA | RECUSADA`), `decididaPorId` (nullable),
+  `decisao` (texto, nullable), `criadaEm`, `decididaEm` (nullable).
+- O colaborador contesta uma nota que considera injusta; se o gestor aceitar,
+  o estorno entra como `AJUSTE_MANUAL` com motivo apontando a contestação
+  (o ledger continua imutável).
 
 ### CasoRecuperacao
 - `id`, `tenantId`, `avaliacaoId`, `gestorResponsavelId`, `status`
@@ -108,7 +158,7 @@ Tenant (provedor — já carrega branding white-label e domínio customizado)
 
 ### Selo (badge)
 - `id`, `tenantId`, `nome`, `descricao`, `icone`, `criterioTipo` (enum:
-  `SEQUENCIA_5_ESTRELAS | ZERO_RECLAMACOES_MES | PRIMEIRO_RESGATE | CUSTOM`).
+  `SEQUENCIA_SINAL_MAXIMO | ZERO_RECLAMACOES_MES | PRIMEIRO_RESGATE | CUSTOM`).
 
 ### SeloConquistado
 - `id`, `tenantId`, `colaboradorId`, `seloId`, `conquistadoEm`.
@@ -135,7 +185,9 @@ Tenant (provedor — já carrega branding white-label e domínio customizado)
   (quando não nulo) — resolução de tenant por domínio (ver
   `02-ARQUITETURA-STACK.md`, seção 4) depende desses dois.
 - `Atendimento`: índice único composto `(tenantId, origemExternaId)` para
-  garantir idempotência de webhooks externos.
+  garantir idempotência da importação de O.S. (polling ou webhook).
+- `ClienteFinal`: índice único composto `(tenantId, idExternoERP)`.
+- `ConvitePesquisa` e `ConviteAcesso`: índice único em `tokenHash`.
 - `Avaliacao`: índice único em `atendimentoId` (1 avaliação por atendimento).
 - `TransacaoPontos`: índice em `(tenantId, colaboradorId, criadoEm)` para
   cálculo rápido de saldo e extrato.
@@ -145,11 +197,22 @@ Tenant (provedor — já carrega branding white-label e domínio customizado)
 
 ## 4. Cálculo de saldo (view ou query, não campo fixo)
 
-`saldoPontos(colaboradorId)` = soma de todos os `pontos` em
-`TransacaoPontos` daquele colaborador, com piso em zero **apenas na
-exibição** (o histórico bruto pode ficar negativo para fins de relatório,
-mas o saldo "gastável" nunca é menor que zero).
+O saldo nunca é um campo gravado: é sempre a agregação de `TransacaoPontos`.
 
-`pontosAcumuladosHistorico(colaboradorId)` = soma apenas dos créditos
-positivos de `TransacaoPontos` (usada para definir `Nivel`, que não deve
-cair quando o colaborador gasta pontos em um resgate).
+- `saldoTotal(colaboradorId)` = soma de todos os `pontos`.
+- `saldoDisponivel(colaboradorId)` = soma dos `pontos` com
+  `disponivelEm <= agora` (créditos ainda pendentes ficam de fora). É o
+  valor usado para resgatar prêmios.
+- `pontosAcumuladosHistorico(colaboradorId)` = soma apenas dos créditos
+  positivos já disponíveis (usada para definir `Nivel`, que não deve cair
+  quando o colaborador gasta pontos em um resgate).
+
+**Piso em zero aplicado no débito, não na exibição.** Quando uma avaliação
+negativa gera um débito maior que o `saldoTotal`, grava-se em `pontos` só o
+que existe de saldo (o saldo nunca fica negativo) e em `pontosCalculados` o
+débito cheio da regra, para relatório. Assim, um crédito posterior nunca é
+"engolido" por uma dívida acumulada.
+
+**Limites diário/semanal** valem para créditos: o crédito efetivo é cortado
+para não passar do teto do período; `pontosCalculados` guarda o valor
+original.

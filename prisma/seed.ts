@@ -92,6 +92,13 @@ async function main() {
       data: REGRAS_PADRAO.map((r) => ({ ...r, tenantId: tenant.id })),
     });
   }
+  // Padrões de docs/03-MODELO-DADOS.md (ConfiguracaoPontuacao).
+  await prisma.configuracaoPontuacao.upsert({
+    where: { tenantId: tenant.id },
+    update: {},
+    create: { tenantId: tenant.id },
+  });
+
   for (const n of NIVEIS_PADRAO) {
     await prisma.nivel.upsert({
       where: {

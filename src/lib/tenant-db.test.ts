@@ -113,7 +113,13 @@ describe.skipIf(!URL_TESTE)("isolamento multi-tenant no banco", () => {
     const db = dbDoTenant(tenantA, prisma);
     const colaborador = await db.usuario.create({ data: { nome: "Colab" } as never });
     const transacao = await db.transacaoPontos.create({
-      data: { colaboradorId: colaborador.id, tipo: "AJUSTE_MANUAL", pontos: 10 } as never,
+      data: {
+        colaboradorId: colaborador.id,
+        tipo: "AJUSTE_MANUAL",
+        pontos: 10,
+        pontosCalculados: 10,
+        motivo: "Teste do ledger",
+      } as never,
     });
 
     await expect(
@@ -122,6 +128,24 @@ describe.skipIf(!URL_TESTE)("isolamento multi-tenant no banco", () => {
     await expect(prisma.transacaoPontos.delete({ where: { id: transacao.id } })).rejects.toThrow(
       /imutável/,
     );
+  });
+
+  it("ajuste manual sem motivo é rejeitado", async () => {
+    const db = dbDoTenant(tenantA, prisma);
+    const colaborador = await db.usuario.create({ data: { nome: "Colab 2" } as never });
+    const base = { colaboradorId: colaborador.id, tipo: "AJUSTE_MANUAL", pontos: 5, pontosCalculados: 5 };
+    await expect(db.transacaoPontos.create({ data: base as never })).rejects.toThrow();
+    await expect(db.transacaoPontos.create({ data: { ...base, motivo: "  " } as never })).rejects.toThrow();
+  });
+
+  it("ConfiguracaoPontuacao é única por tenant e valida os valores", async () => {
+    const db = dbDoTenant(tenantB, prisma);
+    const config = await db.configuracaoPontuacao.create({ data: {} as never });
+    expect(config).toMatchObject({ diasPendencia: 7, nivelRisco: 2, prazoContatoHoras: 24 });
+    await expect(db.configuracaoPontuacao.create({ data: {} as never })).rejects.toThrow();
+    await expect(
+      dbDoTenant(tenantA, prisma).configuracaoPontuacao.create({ data: { nivelRisco: 6 } as never }),
+    ).rejects.toThrow();
   });
 
   it("nivelSinal fora de 1 a 5 é rejeitado", async () => {

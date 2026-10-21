@@ -126,7 +126,7 @@ plataforma para provedores diferentes em todo o Brasil.
   layout raiz (CSS variables do Tailwind + `<link rel="icon">` dinâmico) —
   nenhuma marca fica hardcoded no código.
 - **Onboarding de novo tenant**: fluxo (no mínimo assistido pelo Super
-  Admin, idealmente self-service na Fase 2) que cria o `Tenant`, define
+  Admin, self-service na Fase 5 do roadmap do `CLAUDE.md`) que cria o `Tenant`, define
   slug, permite upload de logo/cores e convida o primeiro `ADMIN_PROVEDOR`.
 - **Verificação de domínio próprio**: quando o tenant cadastra um domínio
   customizado, a plataforma deve expor um registro DNS (CNAME ou TXT) a ser
@@ -138,22 +138,38 @@ Papéis (`role` no modelo de usuário): `SUPER_ADMIN`, `ADMIN_PROVEDOR`,
 `GESTOR`, `COLABORADOR`.
 
 - Middleware do Next.js protege rotas por papel.
-- O **cliente final** nunca autentica: recebe um **link assinado
-  (token único, com expiração)** por WhatsApp/SMS/e-mail para avaliar um
-  atendimento específico — evita necessidade de conta e reduz fricção.
+- O **cliente final** nunca autentica: recebe um **link com token único e
+  expiração** (`ConvitePesquisa`) por WhatsApp/SMS/e-mail para avaliar um
+  atendimento específico — evita necessidade de conta e reduz fricção. Só o
+  hash do token fica no banco.
+- **Colaboradores sem senha** (cadastrados pelo admin, importados por
+  planilha ou sincronizados do ERP) recebem um **convite de primeiro acesso**
+  (`ConviteAcesso`, link de uso único com expiração) para definir a senha.
+- `SUPER_ADMIN` só existe no domínio da plataforma; os demais papéis só no
+  domínio do seu tenant. O login descobre o tenant pelo domínio acessado,
+  porque o e-mail é único por tenant.
 
 ## 6. Motor de pontuação (desenho)
 
 Módulo isolado (`lib/pontuacao.ts`) responsável por:
 1. Receber uma avaliação (`nivelSinal`: 1-5) + `tenantId` + `colaboradorId`.
-2. Buscar a **regra de pontuação ativa** do tenant (tabela
-   `RegraPontuacao`, configurável no admin).
-3. Calcular o delta de pontos (respeitando limites diários/semanais e piso
-   em zero).
+   Avaliação marcada como **suspeita** (sinais antifraude) não pontua
+   automaticamente: fica para revisão do gestor.
+2. Buscar a **regra de pontuação ativa** do tenant (`RegraPontuacao`) e a
+   `ConfiguracaoPontuacao` (limites, dias de pendência, nível de risco,
+   prazo de contato), aplicando o multiplicador de campanha vigente.
+3. Calcular o delta de pontos: créditos respeitam os limites diário/semanal;
+   débitos respeitam o piso em zero **no momento do débito** (nunca
+   debitar além do saldo total). O valor bruto da regra vai em
+   `pontosCalculados`, o efetivo em `pontos`.
 4. Gravar um registro em `TransacaoPontos` (auditoria imutável — nunca
-   fazer `UPDATE` direto no saldo, sempre somar transações).
-5. Se nota <= limite de risco (configurável, padrão 2 barras), criar
-   `CasoRecuperacao` e enfileirar notificação ao gestor.
+   fazer `UPDATE` direto no saldo, sempre somar transações), com
+   `disponivelEm` = agora + `diasPendencia` para créditos.
+5. Se nota <= `nivelRisco` (padrão 2 barras), criar `CasoRecuperacao` com
+   prazo de `prazoContatoHoras` e enfileirar notificação ao gestor.
+
+Tudo numa única transação do banco, para que duas avaliações simultâneas do
+mesmo colaborador não furem limites nem o piso.
 
 Essa separação permite trocar as regras por tenant sem alterar código —
 apenas dados.
@@ -168,6 +184,9 @@ Arquitetura em **padrão adaptador (adapter pattern)**: uma interface comum
 interface ConectorERP {
   listarColaboradores(tenantId: string): Promise<ColaboradorExterno[]>;
   buscarAtendimentoPorId(tenantId: string, idExterno: string): Promise<AtendimentoExterno | null>;
+  // caminho principal para O.S.: consulta periódica (nenhum dos dois ERPs
+  // tem webhook nativo confirmado — ver docs/REFERENCIA-IXC-SGP.md)
+  listarAtendimentosConcluidos(tenantId: string, desde: Date): Promise<AtendimentoExterno[]>;
   // chamado pelo worker de sincronização periódica (BullMQ)
   sincronizar(tenantId: string): Promise<ResultadoSincronizacao>;
 }
@@ -189,7 +208,16 @@ interface ConectorERP {
      (`idExterno` + `tenantId`), nunca duplicando por nome/e-mail;
   3. Marca como inativo quem foi removido do sistema de origem (nunca
      apaga o histórico de pontos do colaborador).
-- **Webhook em tempo real** (quando o sistema de origem suportar): endpoint
+- **Importação periódica de O.S.** (caminho principal): o mesmo worker chama
+  `listarAtendimentosConcluidos(tenantId, desde)` e cria os `Atendimento`
+  com *upsert* por `origemExternaId`, guardando o ponto de corte da última
+  consulta em `IntegracaoERP.ultimaSincronizacaoEm`.
+- **Antes de implementar cada conector**: validar autenticação e endpoints no
+  sandbox do SGP (`demo.sgp.net.br`) e com acesso de teste do IXC — em
+  especial se existe endpoint de colaboradores. Se não existir, o conector
+  importa só O.S. e os colaboradores vêm por planilha, ligados pelo
+  `idExternoERP` do técnico responsável na O.S.
+- **Webhook em tempo real** (opcional, se o sistema de origem suportar): endpoint
   dedicado por conector (`/api/webhooks/ixc`, `/api/webhooks/sgp`) que cria
   o `Atendimento` assim que uma O.S./chamado é concluído, com
   `origemExternaId` único por tenant para garantir idempotência (não
@@ -224,16 +252,25 @@ interface ConectorERP {
   repouso (nunca em texto puro no banco).
 - **LGPD**: dados do cliente final (telefone/e-mail) e dados de
   colaboradores sincronizados do ERP usados apenas para a finalidade do
-  produto; política de retenção a definir.
+  produto. Toda mensagem de pesquisa traz link para o cliente deixar de
+  receber pesquisas (`ClienteFinal.naoPerturbe`); telefone/e-mail de
+  clientes sem atendimento recente devem ser anonimizados após um prazo de
+  retenção configurável (padrão sugerido: 24 meses, a validar
+  juridicamente); o hall da fama nunca expõe dados de clientes.
+- **Limites do plano** (`limiteColaboradores`, `limiteFiliais`) aplicados no
+  cadastro e na importação de usuários/equipes.
 
-## 10. Fases de evolução da stack (pós-MVP)
+## 10. Evolução da stack por fase
 
-1. **Fase 2**: onboarding self-service de novo tenant (branding e domínio
-   próprio sem intervenção manual), automação de emissão de certificado por
-   domínio customizado (avaliar migração/adição de Caddy), app PWA com push
-   notification.
-2. **Fase 3**: storage de imagens migrado para S3-compatible (MinIO ou
-   provedor cloud), métricas avançadas (BI) por tenant e consolidadas para o
-   Super Admin, billing automatizado (Stripe ou gateway nacional).
-3. **Fase 4**: suporte a sistemas de gestão adicionais além de IXC/SGP, via
-   a mesma interface `ConectorERP`.
+A numeração segue o roadmap oficial do `CLAUDE.md`.
+
+1. **Fase 2**: Redis + BullMQ entram com o worker de sincronização IXC/SGP.
+2. **Fase 3**: `sharp` para fotos de prêmios, ainda em disco local.
+3. **Fase 4**: workers de notificação (WhatsApp/e-mail/SMS).
+4. **Fase 5**: onboarding self-service de novo tenant, automação de
+   certificado por domínio customizado (avaliar migração/adição de Caddy),
+   PWA com push notification.
+5. **Pós-MVP**: storage de imagens em S3-compatible (MinIO ou provedor
+   cloud), métricas avançadas (BI) por tenant e consolidadas para o Super
+   Admin, billing automatizado (Stripe ou gateway nacional), sistemas de
+   gestão adicionais além de IXC/SGP via a mesma interface `ConectorERP`.
