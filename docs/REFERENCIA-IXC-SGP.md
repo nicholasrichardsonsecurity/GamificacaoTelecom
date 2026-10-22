@@ -193,19 +193,61 @@ Testes somente leitura, feitos do ambiente de nuvem com as variáveis
   deve ter só as permissões da seção 6 e o conector deve descartar tudo que
   não for usado.
 
-### SGP — ainda não autenticou
+### SGP — funcionando (reteste em 22/10/2026)
 
-- A URL de teste configurada é a de um SGP real (não o `demo.sgp.net.br`).
-- `POST /api/ura/clientes/` e `POST /api/os/list/` com `token` e `app` no
-  corpo (form, multipart, JSON ou querystring) respondem
-  `403 {"detail":"Credenciais de autenticação incorretas."}`. Sem os campos,
-  a resposta é "As credenciais de autenticação não foram fornecidas", ou
-  seja, o formato está certo e o par token/app é que foi recusado.
-- O `demo.sgp.net.br` e o `bookstack.sgp.net.br` estão bloqueados pela rede
-  do ambiente de nuvem.
-- Próximo passo: conferir no painel do SGP (Administração > Integrações >
-  Tokens) se o token está ativo e o nome exato do App, ou liberar o
-  `demo.sgp.net.br` para testar com `demo`/`demo`.
+O primeiro teste deu 403 porque o par token/app estava errado; com o App
+`sinalplus` e o token novo a autenticação passou. A URL de teste é a de um
+SGP real (não o `demo.sgp.net.br`).
+
+- **Autenticação**: `POST` com `token` e `app` como campos de formulário
+  (`application/x-www-form-urlencoded`) ou no corpo JSON. `GET` responde
+  `405`. Sem os campos: "As credenciais de autenticação não foram
+  fornecidas"; par errado: `403 "Credenciais de autenticação incorretas."`.
+- **O.S. concluídas — usar `POST /api/ura/ordemservico/list/`**, não o
+  `/api/os/list/`:
+  - Resposta `{"paginacao":{"offset","limit","parcial","total"},"ordens_servicos":[...]}`,
+    ordenada por `id` decrescente.
+  - Filtros que funcionam: `status=1` (encerradas; `0` = abertas; o texto
+    `Encerrada` dá erro 500), `data_finalizacao_inicio` /
+    `data_finalizacao_fim` e `data_cadastro_inicio` / `data_cadastro_fim`
+    (`AAAA-MM-DD`), `offset` e `limit` (padrão e máximo 1000; `5000` dá 400).
+  - Campos úteis: `id`, `status` / `status_id`, `data_finalizacao` +
+    `hora_finalizacao` (separadas), `motivo` (ex.: Corretiva, Instalação de
+    KIT, Preventiva), `tipo` (Externa/Interna), `ocorrencia`, `contrato`
+    (id), `cliente` (só o nome), `responsavel`, `tecnicos_auxiliares`
+    (lista de strings), `usuario`, `usuario_finalizacao`, `pop`.
+  - Volume no provedor de teste: 2.301 O.S. (2.211 encerradas), 8
+    finalizadas entre 01 e 21/10/2026, histórico desde 10/2024.
+- **`POST /api/os/list/`** só devolve O.S. **abertas** (90 no teste):
+  `status`, datas e paginação são ignorados; aceita `status_id`,
+  `cliente_id` e `contrato`. Serve para o app do técnico, não para a
+  sincronização.
+- **Colaboradores**: `POST /api/ura/tecnicos/` existe e devolve
+  `[{"id","username","nome"}]` (20 técnicos, sem e-mail, telefone nem flag
+  de ativo). Quem sai do SGP some da lista, então "desativar quem saiu"
+  funciona por ausência.
+- **Vínculo O.S. → técnico** (atenção, não há id numérico):
+  - `tecnicos_auxiliares` e `usuario_finalizacao` trazem o `username`.
+  - `responsavel` traz o **`nome`** do técnico (6 de 8 casaram por nome, 1
+    por username) e vem vazio em ~metade das O.S. encerradas.
+  - Regra sugerida para o conector: técnico = `responsavel` (casando por
+    `nome` e, se não achar, por `username`); se vazio, usar
+    `usuario_finalizacao`; auxiliares entram pelo `username`. Guardar o
+    `id` de `/api/ura/tecnicos/` como `idExternoERP`.
+- **Contato do cliente** para enviar a pesquisa: a O.S. só tem o nome do
+  cliente e o `contrato`. `POST /api/ura/clientes/` com `contrato=<id>`
+  devolve o cliente (`contatos.celulares`, `contatos.emails`,
+  `contatos.telefones`); paginação por `offset`/`limit` (padrão 100).
+- **Webhook**: não encontrado; seguir com consulta periódica por
+  `data_finalizacao_inicio` (ou pelo maior `id` já importado).
+- **Atenção de segurança**: `/api/os/list/` devolve senha do Wi-Fi, senha
+  PPPoE (`servico_password`, `wan_password`) e dados de ONU, e
+  `/api/ura/clientes/` devolve `contratoCentralSenha`. O conector deve usar
+  `/api/ura/ordemservico/list/` e descartar tudo o que não for usado, sem
+  nunca gravar esses campos nem colocá-los em log.
+- O `demo.sgp.net.br` e o `bookstack.sgp.net.br` continuam bloqueados pela
+  rede do ambiente de nuvem; os endpoints acima foram achados testando no
+  SGP real.
 
 ## 3. Comparativo rápido (o que já dá pra concluir)
 
@@ -214,8 +256,8 @@ Testes somente leitura, feitos do ambiente de nuvem com as variáveis
 | Autenticação | Token (mecanismo exato não confirmado publicamente) | Basic, Token, ou CPF/CNPJ+senha (para cliente final) |
 | Sandbox/homologação | Não identificado publicamente | Sim — `demo.sgp.net.br`, com dados fictícios |
 | Documentação centralizada de endpoints | Dispersa em wiki (menu), sem corpo de página capturável publicamente | Coleção Postman dedicada (mais fácil de explorar) |
-| Endpoints de O.S. confirmados | Não (módulo "Suporte" existe, endpoints não confirmados) | Sim: `GET /api/os/list/`, `PUT /api/os/update/id/{id}/` |
-| Endpoints de colaboradores/equipe confirmados | Não | Não confirmado — endpoints encontrados são voltados ao cliente final/URA |
+| Endpoints de O.S. confirmados | Sim: tabela `su_oss_chamado` (ver 2.1) | Sim: `POST /api/ura/ordemservico/list/` (ver 2.1) |
+| Endpoints de colaboradores/equipe confirmados | Sim: tabela `funcionarios` | Sim: `POST /api/ura/tecnicos/` (id, username, nome) |
 | Webhooks nativos | Não identificado | Não identificado |
 | Suporte ao desenvolvedor | Não identificado um canal direto | E-mail e WhatsApp dedicados (`desenvolvimento@sgp.net.br`) |
 
