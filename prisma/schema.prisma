@@ -170,6 +170,8 @@ model IntegracaoERP {
   /// Intervalo da sincronização periódica, em minutos.
   frequenciaSincronizacao   Int                 @default(60)
   ultimaSincronizacaoEm     DateTime?
+  /// Última tentativa (com sucesso ou não); o worker usa para não insistir em erro.
+  ultimaTentativaEm         DateTime?
   ultimoStatusSincronizacao StatusSincronizacao @default(NUNCA_EXECUTADA)
   criadoEm                  DateTime            @default(now())
 

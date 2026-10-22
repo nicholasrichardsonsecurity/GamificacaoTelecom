@@ -23,6 +23,7 @@ const MENU: Record<Role, ItemNav[]> = {
     { href: "/admin/equipes", rotulo: "Equipes" },
     { href: "/admin/atendimentos", rotulo: "Atendimentos" },
     { href: "/admin/pontuacao", rotulo: "Pontuação" },
+    { href: "/admin/integracao", rotulo: "Integração" },
     { href: "/admin/marca", rotulo: "Marca" },
     ...GESTAO,
   ],

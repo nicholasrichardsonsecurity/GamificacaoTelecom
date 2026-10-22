@@ -151,17 +151,17 @@ avançada.
 > - Uploads ficam em `UPLOADS_DIR`; o tipo é checado pelos bytes e SVG é recusado.
 
 ### Fase 2 — Conectores de ERP: IXC e SGP (prioridade)
-- [ ] Definir a interface `ConectorERP` (`src/lib/erp-connectors/types.ts`).
+- [x] Definir a interface `ConectorERP` (`src/lib/erp-connectors/types.ts`).
 - [ ] Validar as APIs antes de codar: SGP no sandbox `demo.sgp.net.br` e
       IXC com acesso de teste de um provedor (ex.: GigaNetPe), confirmando
       autenticação, endpoint de O.S. concluídas e se existe endpoint de
       colaboradores (checklists em `docs/REFERENCIA-IXC-SGP.md`).
-- [ ] Implementar `ixc.ts`: autenticação, `listarAtendimentosConcluidos`,
+- [x] Implementar `ixc.ts`: autenticação, `listarAtendimentosConcluidos`,
       `listarColaboradores` (se a API permitir) e `sincronizar`.
-- [ ] Implementar `sgp.ts`: idem, para a API do SGP.
-- [ ] Tela de configuração de `IntegracaoERP` para o Admin do Provedor
+- [x] Implementar `sgp.ts`: idem, para a API do SGP.
+- [x] Tela de configuração de `IntegracaoERP` para o Admin do Provedor
       (escolher sistema, informar credenciais, testar conexão).
-- [ ] Worker BullMQ de sincronização periódica — caminho principal:
+- [x] Worker BullMQ de sincronização periódica — caminho principal:
       importa O.S. concluídas como `Atendimento` (idempotente por
       `origemExternaId`) e faz *upsert* de `Usuario` por `idExternoERP`,
       nunca duplicando, desativando quem saiu do ERP sem apagar histórico
@@ -169,6 +169,27 @@ avançada.
 - [ ] (Opcional, se o ERP oferecer) Endpoints de webhook `/api/webhooks/ixc`
       e `/api/webhooks/sgp` para criação de `Atendimento` em tempo real,
       com a mesma idempotência.
+
+> **Decisões tomadas na Fase 2** (conectores ajustados ao que a validação de
+> 22/10/2026 mostrou, ver seção 2.1 de `docs/REFERENCIA-IXC-SGP.md`, que entra com o PR #4;
+> falta só rodar de novo contra as APIs reais numa sessão com as variáveis de teste):
+> - O conector já nasce com URL e credenciais do tenant (`criarConector`) e só
+>   conversa com o ERP; quem grava é `src/lib/sincronizacao.ts` (idempotente por
+>   `origemExternaId`/`idExternoERP`). A interface difere do rascunho dos docs
+>   (sem `tenantId` nos métodos).
+> - IXC autentica com o token inteiro (`id:hash`) em Basic, sem id de usuário.
+>   SGP: POST com `token`+`app`; O.S. em `/api/ura/ordemservico/list/` (o
+>   `/api/os/list/` só traz abertas e expõe senhas) e técnicos em
+>   `/api/ura/tecnicos/`. No SGP a O.S. liga ao técnico por nome ou username (sem
+>   id) e o cliente é identificado pelo contrato. Os conectores só copiam os
+>   campos necessários (nunca senhas, dados bancários ou de ONU).
+> - O.S. de técnico desconhecido é ignorada com aviso (cadastre-o ou importe a planilha).
+> - Quem sai do ERP é desativado (nunca apagado). A importação só cria o
+>   `Atendimento`; o envio do convite de pesquisa é da Fase 4.
+> - Worker: `npm run worker` (BullMQ, varredura a cada 5 min; roda a integração
+>   cuja última tentativa passou da frequência). URL de ERP em rede interna é
+>   recusada (SSRF), salvo `ERP_PERMITIR_REDE_PRIVADA=1`.
+> - Falta: reteste ao vivo e webhooks opcionais (nenhum dos dois ERPs tem webhook).
 
 ### Fase 3 — Prêmios e resgate
 - [ ] CRUD de `Premio` com upload de múltiplas fotos (`sharp` para resize).

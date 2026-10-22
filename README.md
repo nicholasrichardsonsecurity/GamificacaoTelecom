@@ -217,13 +217,24 @@ src/
 - **Colaborador**: saldo disponível e pendente, nível, selos, extrato,
   avaliações recebidas com contestação, e ranking.
 
+### O que a Fase 2 entrega
+
+- **Conectores IXC e SGP** atrás da interface `ConectorERP`
+  (`src/lib/erp-connectors/`); credenciais cifradas em repouso.
+- **Tela "Integração"** do Admin do Provedor: configurar, testar conexão e
+  sincronizar na hora.
+- **Sincronização idempotente**: colaboradores por `idExternoERP` (quem sai do
+  ERP é desativado, sem apagar pontos) e O.S. concluídas por `origemExternaId`.
+- **Worker** `npm run worker` (BullMQ + Redis) sincroniza no intervalo de cada
+  provedor.
+
 ## Roadmap
 
 | Fase | Entrega | Status |
 |:---:|---|:---:|
 | 0 | Fundação técnica: Next.js, Prisma, schema com white-label, Auth.js + RBAC, resolução de tenant | ✅ |
 | 1 | Núcleo de negócio (MVP): tenants, branding, usuários, regras, avaliação por sinal, motor de pontuação, ranking | ✅ |
-| 2 | Conectores de ERP IXC e SGP: sincronização periódica e webhooks | ⏳ |
+| 2 | Conectores de ERP IXC e SGP: sincronização periódica e webhooks | 🚧 (código pronto e ajustado à validação nas APIs de teste) |
 | 3 | Prêmios e resgate com fotos, aprovação e baixa de estoque | ⏳ |
 | 4 | Notificações (WhatsApp, e-mail, SMS) e campanhas de pontos | ⏳ |
 | 5 | White-label avançado: onboarding self-service, domínio próprio com HTTPS automático | ⏳ |
