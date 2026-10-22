@@ -15,7 +15,7 @@ const SISTEMAS = [
   {
     sistema: "IXC",
     nome: "IXC Provedor",
-    dica: "No IXC: Administrativo > Usuários > Webservice (gere o token). A URL é a do seu IXC, ex.: https://ixc.seuprovedor.com.br",
+    dica: "No IXC, gere o token do usuário da API (ele vem como id:hash; cole inteiro). A URL é a do seu IXC, ex.: https://ixc.seuprovedor.com.br",
   },
   {
     sistema: "SGP",
@@ -70,11 +70,6 @@ export default async function PaginaIntegracao({ searchParams }: { searchParams:
                       <Input id={`url-${s.sistema}`} name="urlBase" type="url" required defaultValue={atual?.urlBase ?? ""} />
                     </Campo>
                   </div>
-                  {s.sistema === "IXC" && (
-                    <Campo id="ixc-usuario" rotulo="Id do usuário da API">
-                      <Input id="ixc-usuario" name="usuarioId" autoComplete="off" placeholder={atual ? "•••• (mantido)" : ""} />
-                    </Campo>
-                  )}
                   {s.sistema === "SGP" && (
                     <Campo id="sgp-app" rotulo="Nome do app">
                       <Input id="sgp-app" name="app" autoComplete="off" placeholder={atual ? "•••• (mantido)" : ""} />

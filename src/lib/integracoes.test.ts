@@ -25,14 +25,14 @@ describe.skipIf(!URL_TESTE)("integração com ERP: configuração e varredura", 
   });
 
   it("grava credenciais cifradas e as mantém quando o campo vem em branco", async () => {
-    const cred = lerCredenciais("IXC", { usuarioId: "7", token: "segredo", app: "" });
+    const cred = lerCredenciais("IXC", { token: "7:segredo", app: "" });
     const i = await salvarIntegracao(db, tenant.id, dados, cred);
     expect(i.urlBase).toBe("https://ixc.x.com");
     expect(i.credenciais).not.toContain("segredo");
-    expect(JSON.parse(decifrar(i.credenciais))).toEqual({ usuarioId: "7", token: "segredo" });
+    expect(JSON.parse(decifrar(i.credenciais))).toEqual({ token: "7:segredo" });
 
     const antes = i.credenciais;
-    const i2 = await salvarIntegracao(db, tenant.id, { ...dados, frequenciaSincronizacao: 30 }, lerCredenciais("IXC", { usuarioId: "", token: "", app: "" }));
+    const i2 = await salvarIntegracao(db, tenant.id, { ...dados, frequenciaSincronizacao: 30 }, lerCredenciais("IXC", { token: "", app: "" }));
     expect(i2.credenciais).toBe(antes);
     expect(i2.frequenciaSincronizacao).toBe(30);
     expect(await db.integracaoERP.count()).toBe(1);
@@ -41,7 +41,7 @@ describe.skipIf(!URL_TESTE)("integração com ERP: configuração e varredura", 
   it("exige credenciais na primeira vez e respeita o plano", async () => {
     await expect(salvarIntegracao(db, tenant.id, { ...dados, sistema: "SGP" }, null)).rejects.toThrow("credenciais");
     await prisma.plano.update({ where: { id: tenant.planoId }, data: { permiteIntegracaoERP: false } });
-    await expect(salvarIntegracao(db, tenant.id, dados, { usuarioId: "1", token: "t" })).rejects.toThrow("plano");
+    await expect(salvarIntegracao(db, tenant.id, dados, { token: "t" })).rejects.toThrow("plano");
     await prisma.plano.update({ where: { id: tenant.planoId }, data: { permiteIntegracaoERP: true } });
   });
 

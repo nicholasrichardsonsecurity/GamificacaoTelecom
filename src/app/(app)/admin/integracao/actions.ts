@@ -23,8 +23,8 @@ export async function salvarIntegracaoAction(formData: FormData) {
   try {
     const f = campos(formData);
     const dados = integracaoSchema.parse({ ...f, ativa: f.ativa === "on" });
-    const { usuarioId = "", token = "", app = "" } = f;
-    await salvarIntegracao(db, tenant.id, dados, lerCredenciais(dados.sistema, { usuarioId, token, app }));
+    const { token = "", app = "" } = f;
+    await salvarIntegracao(db, tenant.id, dados, lerCredenciais(dados.sistema, { token, app }));
   } catch (erro) {
     voltar(PAGINA, { erro: mensagem(erro) });
   }

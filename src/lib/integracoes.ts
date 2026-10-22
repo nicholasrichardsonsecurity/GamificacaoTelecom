@@ -24,7 +24,7 @@ export function lerCredenciais(sistema: "IXC" | "SGP", f: Record<string, string>
   const preenchido = Object.values(f).some((v) => v.trim() !== "");
   if (!preenchido) return null;
   return sistema === "IXC"
-    ? credenciaisIxcSchema.parse({ usuarioId: f.usuarioId, token: f.token })
+    ? credenciaisIxcSchema.parse({ token: f.token })
     : credenciaisSgpSchema.parse({ token: f.token, app: f.app });
 }
 

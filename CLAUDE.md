@@ -170,21 +170,26 @@ avançada.
       e `/api/webhooks/sgp` para criação de `Atendimento` em tempo real,
       com a mesma idempotência.
 
-> **Decisões tomadas na Fase 2** (código pronto; IXC e SGP ainda **não validados**
-> contra APIs reais, por falta das credenciais de teste):
+> **Decisões tomadas na Fase 2** (conectores ajustados ao que a validação de
+> 22/10/2026 mostrou, ver seção 2.1 de `docs/REFERENCIA-IXC-SGP.md`, que entra com o PR #4;
+> falta só rodar de novo contra as APIs reais numa sessão com as variáveis de teste):
 > - O conector já nasce com URL e credenciais do tenant (`criarConector`) e só
 >   conversa com o ERP; quem grava é `src/lib/sincronizacao.ts` (idempotente por
 >   `origemExternaId`/`idExternoERP`). A interface difere do rascunho dos docs
 >   (sem `tenantId` nos métodos).
-> - SGP não expõe colaboradores (`listarColaboradores` devolve `null`): técnicos
->   vêm por planilha, ligados pelo id externo; O.S. de técnico desconhecido é
->   ignorada com aviso.
+> - IXC autentica com o token inteiro (`id:hash`) em Basic, sem id de usuário.
+>   SGP: POST com `token`+`app`; O.S. em `/api/ura/ordemservico/list/` (o
+>   `/api/os/list/` só traz abertas e expõe senhas) e técnicos em
+>   `/api/ura/tecnicos/`. No SGP a O.S. liga ao técnico por nome ou username (sem
+>   id) e o cliente é identificado pelo contrato. Os conectores só copiam os
+>   campos necessários (nunca senhas, dados bancários ou de ONU).
+> - O.S. de técnico desconhecido é ignorada com aviso (cadastre-o ou importe a planilha).
 > - Quem sai do ERP é desativado (nunca apagado). A importação só cria o
 >   `Atendimento`; o envio do convite de pesquisa é da Fase 4.
 > - Worker: `npm run worker` (BullMQ, varredura a cada 5 min; roda a integração
 >   cuja última tentativa passou da frequência). URL de ERP em rede interna é
 >   recusada (SSRF), salvo `ERP_PERMITIR_REDE_PRIVADA=1`.
-> - Falta: validar com credenciais reais e webhooks opcionais.
+> - Falta: reteste ao vivo e webhooks opcionais (nenhum dos dois ERPs tem webhook).
 
 ### Fase 3 — Prêmios e resgate
 - [ ] CRUD de `Premio` com upload de múltiplas fotos (`sharp` para resize).

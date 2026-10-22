@@ -8,7 +8,6 @@ import { ErroConectorERP, type ConectorERP, type OpcoesConector } from "./types"
 export * from "./types";
 
 export const credenciaisIxcSchema = z.object({
-  usuarioId: z.string().trim().min(1, "Informe o id do usuário da API."),
   token: z.string().trim().min(1, "Informe o token."),
 });
 export const credenciaisSgpSchema = z.object({

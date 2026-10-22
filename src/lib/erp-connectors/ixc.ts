@@ -11,13 +11,14 @@ import {
 /**
  * Conector do IXC Provedor.
  *
- * ATENÇÃO: implementado a partir da wiki pública (webservice v1: Basic
- * `usuarioId:token`, POST com header `ixcsoft: listar`, grid com
- * qtype/query/oper/page/rp). Ainda NÃO foi validado contra uma instância
- * real: confirmar nomes de campos com o acesso de teste (docs/REFERENCIA-IXC-SGP.md).
+ * Validado em 22/10/2026 contra o IXC da GigaNetPe (docs/REFERENCIA-IXC-SGP.md,
+ * seção 2.1): `Authorization: Basic base64(<token>)` com o token inteiro no
+ * formato `<id>:<hash>`, POST com header `ixcsoft: listar` e grid
+ * qtype/query/oper/page/rp. Só lemos os campos de que precisamos: o usuário de
+ * teste enxerga salário, dados bancários e senhas, que nunca são copiados.
  */
 
-export type CredenciaisIxc = { usuarioId: string; token: string };
+export type CredenciaisIxc = { token: string };
 
 const POR_PAGINA = 200;
 const MAX_PAGINAS = 500;
@@ -32,6 +33,12 @@ export function classificarAssunto(assunto: string | null): TipoAtendimento {
   return "SUPORTE";
 }
 
+/** O IXC usa `0000-00-00` para "sem data". */
+const dataValida = (v: unknown) => {
+  const t = texto(v);
+  return !!t && !t.startsWith("0000") && !Number.isNaN(new Date(t.replace(" ", "T")).getTime());
+};
+
 export class ConectorIxc implements ConectorERP {
   readonly sistema = "IXC" as const;
   private readonly base: string;
@@ -42,7 +49,7 @@ export class ConectorIxc implements ConectorERP {
     credenciais: CredenciaisIxc,
   ) {
     this.base = normalizarUrlBase(opcoes.urlBase) + "/webservice/v1";
-    this.auth = "Basic " + Buffer.from(`${credenciais.usuarioId}:${credenciais.token}`).toString("base64");
+    this.auth = "Basic " + Buffer.from(credenciais.token).toString("base64");
   }
 
   private async listar(recurso: string, filtro: Record<string, string>, pagina: number): Promise<Registro[]> {
@@ -86,7 +93,7 @@ export class ConectorIxc implements ConectorERP {
       const id = texto(r.id);
       const nome = texto(r.funcionario);
       if (!id || !nome) return [];
-      return [{ idExterno: id, nome, email: texto(r.email)?.toLowerCase() ?? null, ativo: r.ativo !== "N", equipe: null }];
+      return [{ idExterno: id, nome, email: texto(r.email)?.toLowerCase() ?? null, ativo: r.ativo !== "N" && !dataValida(r.data_demissao), equipe: null }];
     });
   }
 
@@ -97,6 +104,13 @@ export class ConectorIxc implements ConectorERP {
       query: data,
       oper: ">=",
     });
+    const assuntos = new Map(
+      (await this.listarTudo("su_oss_assunto", { qtype: "su_oss_assunto.id", query: "0", oper: ">" })).flatMap((a) => {
+        const id = texto(a.id);
+        const nome = texto(a.assunto);
+        return id && nome ? [[id, nome] as const] : [];
+      }),
+    );
     const concluidas = os.filter((o) => o.status === "F" && texto(o.data_fechamento));
     const clientes = new Map<string, Registro>();
     const ids = [...new Set(concluidas.map((o) => texto(o.id_cliente)).filter((i): i is string => !!i))];
@@ -113,12 +127,12 @@ export class ConectorIxc implements ConectorERP {
       return [
         {
           idExterno: id,
-          tipo: classificarAssunto(texto(o.id_assunto)),
+          tipo: classificarAssunto(assuntos.get(texto(o.id_assunto) ?? "") ?? null),
           colaboradorIdExterno: texto(o.id_tecnico) === "0" ? null : texto(o.id_tecnico),
           cliente: {
             idExterno: idCliente,
             nome: texto(c?.razao) ?? `Cliente ${idCliente}`,
-            telefone: texto(c?.telefone_celular),
+            telefone: texto(c?.telefone_celular) ?? texto(c?.whatsapp) ?? texto(c?.fone),
             email: texto(c?.email)?.toLowerCase() ?? null,
           },
           concluidoEm: fim,

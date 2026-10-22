@@ -37,13 +37,16 @@ describe("conectores de ERP", () => {
           registros: [
             { id: "1", funcionario: "Ana Técnica", email: "ANA@x.com", ativo: "S" },
             { id: "2", funcionario: "Saiu", email: "", ativo: "N" },
+            { id: "3", funcionario: "Demitido", email: "d@x.com", ativo: "S", data_demissao: "2026-09-01" },
+            { id: "4", funcionario: "Ativo", email: "", ativo: "S", data_demissao: "0000-00-00" },
           ],
         });
       }
+      if (u.endsWith("/su_oss_assunto")) return json({ registros: [{ id: "3", assunto: "Instalação de fibra" }] });
       if (u.endsWith("/su_oss_chamado")) {
         return json({
           registros: [
-            { id: "10", status: "F", id_cliente: "55", id_tecnico: "1", data_fechamento: "2026-10-20 14:00:00", id_assunto: "Suporte" },
+            { id: "10", status: "F", id_cliente: "55", id_tecnico: "1", data_fechamento: "2026-10-20 14:00:00", id_assunto: "3" },
             { id: "11", status: "A", id_cliente: "55", id_tecnico: "1", data_fechamento: "0000-00-00 00:00:00" },
           ],
         });
@@ -52,18 +55,20 @@ describe("conectores de ERP", () => {
       return json({ registros: [{ id: "55", razao: "Maria", telefone_celular: "81999", email: "M@x.com" }] });
     });
     const c = criarConector("IXC", { urlBase: "https://ixc.x.com", fetch: fetchFalso as unknown as typeof fetch }, {
-      usuarioId: "7",
-      token: "segredo",
+      token: "7:segredo",
     });
     const colabs = await c.listarColaboradores();
     expect(colabs).toEqual([
       { idExterno: "1", nome: "Ana Técnica", email: "ana@x.com", ativo: true, equipe: null },
       { idExterno: "2", nome: "Saiu", email: null, ativo: false, equipe: null },
+      { idExterno: "3", nome: "Demitido", email: "d@x.com", ativo: false, equipe: null },
+      { idExterno: "4", nome: "Ativo", email: null, ativo: true, equipe: null },
     ]);
     const os = await c.listarAtendimentosConcluidos(new Date("2026-10-01T00:00:00Z"));
     expect(os).toHaveLength(1);
     expect(os[0]).toMatchObject({
       idExterno: "10",
+      tipo: "INSTALACAO",
       colaboradorIdExterno: "1",
       cliente: { idExterno: "55", nome: "Maria", email: "m@x.com" },
     });
@@ -71,7 +76,7 @@ describe("conectores de ERP", () => {
 
   it("erros não vazam credenciais e são do tipo ErroConectorERP", async () => {
     const recusa = (async () => json({}, 401)) as unknown as typeof fetch;
-    const c = criarConector("IXC", { urlBase: "https://ixc.x.com", fetch: recusa }, { usuarioId: "7", token: "segredo" });
+    const c = criarConector("IXC", { urlBase: "https://ixc.x.com", fetch: recusa }, { token: "7:segredo" });
     const erro = await c.testarConexao().catch((e) => e);
     expect(erro).toBeInstanceOf(ErroConectorERP);
     expect(erro.message).not.toContain("segredo");
@@ -82,25 +87,58 @@ describe("conectores de ERP", () => {
     expect((await c2.testarConexao().catch((e) => e)).message).not.toContain("segredo");
   });
 
-  it("SGP: lê O.S. concluídas e não expõe colaboradores", async () => {
-    const f = (async () =>
-      json({
-        ordens: [
-          { id: 5, cliente_id: 9, cliente_nome: "João", tecnico_id: 3, data_fechamento: "2026-10-20T10:00:00Z", motivo: "Instalação" },
-          { id: 6, cliente_id: 9, data_fechamento: "2020-01-01T10:00:00Z" },
+  it("SGP: lista técnicos, liga a O.S. ao técnico e busca o contato pelo contrato", async () => {
+    const chamadas: string[] = [];
+    const f = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const u = String(url).replace("https://sgp.x.com", "");
+      chamadas.push(u);
+      const corpo = new URLSearchParams(String(init?.body));
+      expect(corpo.get("token")).toBe("t");
+      expect(corpo.get("app")).toBe("a");
+      expect((init?.headers as Record<string, string>)["Content-Type"]).toBe("application/x-www-form-urlencoded");
+      if (u === "/api/ura/tecnicos/") {
+        return json([
+          { id: 3, username: "joao.s", nome: "João Silva" },
+          { id: 4, username: "maria", nome: "Maria Souza" },
+        ]);
+      }
+      if (u === "/api/ura/clientes/") {
+        expect(corpo.get("contrato")).toBe("900");
+        return json({ clientes: [{ contatos: { celulares: ["81999990000"], emails: ["C@X.com"], telefones: [] } }] });
+      }
+      expect(u).toBe("/api/ura/ordemservico/list/");
+      expect(corpo.get("status")).toBe("1");
+      return json({
+        paginacao: { offset: 0, limit: 1000, total: 4 },
+        ordens_servicos: [
+          { id: 5, contrato: 900, cliente: "Cliente Um", responsavel: "João Silva", data_finalizacao: "2026-10-20", hora_finalizacao: "10:00:00", motivo: "Instalação de KIT", servico_password: "NAO-COPIAR" },
+          { id: 6, contrato: 900, cliente: "Cliente Um", responsavel: "", usuario_finalizacao: "maria", data_finalizacao: "2026-10-20", hora_finalizacao: "11:00:00", motivo: "Corretiva" },
+          { id: 7, contrato: 901, cliente: "Sem Técnico", responsavel: "Ninguém", data_finalizacao: "2026-10-20", hora_finalizacao: "12:00:00", motivo: "Corretiva" },
+          { id: 8, contrato: 900, cliente: "Antiga", responsavel: "João Silva", data_finalizacao: "2020-01-01", hora_finalizacao: "12:00:00" },
         ],
-      })) as unknown as typeof fetch;
-    const c = criarConector("SGP", { urlBase: "https://sgp.x.com", fetch: f }, { token: "t", app: "a" });
-    expect(await c.listarColaboradores()).toBeNull();
+      });
+    });
+    const c = criarConector("SGP", { urlBase: "https://sgp.x.com", fetch: f as unknown as typeof fetch }, { token: "t", app: "a" });
+    expect(await c.listarColaboradores()).toEqual([
+      { idExterno: "3", nome: "João Silva", email: null, ativo: true, equipe: null },
+      { idExterno: "4", nome: "Maria Souza", email: null, ativo: true, equipe: null },
+    ]);
     const os = await c.listarAtendimentosConcluidos(new Date("2026-10-01T00:00:00Z"));
-    expect(os).toHaveLength(1);
-    expect(os[0]).toMatchObject({ idExterno: "5", tipo: "INSTALACAO", colaboradorIdExterno: "3" });
+    expect(os.map((o) => [o.idExterno, o.colaboradorIdExterno, o.tipo])).toEqual([
+      ["5", "3", "INSTALACAO"],
+      ["6", "4", "SUPORTE"],
+      ["7", null, "SUPORTE"],
+    ]);
+    expect(os[0].concluidoEm.toISOString()).toBe("2026-10-20T13:00:00.000Z");
+    expect(os[0].cliente).toEqual({ idExterno: "contrato-900", nome: "Cliente Um", telefone: "81999990000", email: "c@x.com" });
+    expect(JSON.stringify(os)).not.toContain("NAO-COPIAR");
+    expect(chamadas.filter((u) => u === "/api/ura/clientes/")).toHaveLength(2); // um por contrato (900 e 901)
   });
 
   it("conectorDaIntegracao decifra as credenciais e recusa lixo", () => {
     const chave = Buffer.alloc(32, 1).toString("base64");
     vi.stubEnv("CREDENCIAIS_CHAVE", chave);
-    const cifrado = cifrar(JSON.stringify({ usuarioId: "1", token: "t" }), chave);
+    const cifrado = cifrar(JSON.stringify({ token: "1:t" }), chave);
     expect(conectorDaIntegracao({ sistema: "IXC", urlBase: "https://x.com", credenciais: cifrado }).sistema).toBe("IXC");
     expect(() =>
       conectorDaIntegracao({ sistema: "IXC", urlBase: "https://x.com", credenciais: "lixo" }),
