@@ -154,6 +154,101 @@ para esclarecer dúvidas de implementação direto com a TSMX.
 
 ---
 
+## 2.1 Validação com acessos de teste (22/10/2026)
+
+Testes somente leitura, feitos do ambiente de nuvem com as variáveis
+`IXC_TESTE_*` e `SGP_TESTE_*` (seção 6). Nenhum dado pessoal foi guardado.
+
+### IXC (GigaNetPe) — funcionando
+
+- **Autenticação**: `Authorization: Basic base64(<token>)`, em que o token
+  já vem no formato `<id>:<hash>` gerado pelo IXC. O `<id>` do token **não**
+  é o ID do usuário da API, então o conector deve usar o token inteiro.
+- **Listagem**: `POST <URL>/webservice/v1/<tabela>` com o header
+  `ixcsoft: listar` e corpo JSON
+  `{"qtype":"<tabela>.<campo>","query":"...","oper":"=|>|>=|<|like","page":"1","rp":"<qtd>","sortname":"<tabela>.<campo>","sortorder":"asc|desc"}`.
+  A resposta é `{"page","total","registros":[...]}` com todos os valores
+  como string (content-type `text/x-json`).
+- **Colaboradores**: tabela `funcionarios` existe e é acessível (campos úteis:
+  `id`, `funcionario` (nome), `email`, `fone_celular`, `ativo` (`S`/`N`),
+  `data_demissao`, `filial_id`, `id_departamento`, `id_funcao`). Na
+  GigaNetPe: 7 funcionários, 6 com e-mail. Também há `usuarios` (logins do
+  sistema).
+- **O.S. concluídas**: tabela `su_oss_chamado`, `status = "F"` (outros vistos:
+  `A`, `AG`, `EX`). Filtro por data funciona com
+  `qtype=su_oss_chamado.data_fechamento`, `oper=">="`. Campos úteis: `id`,
+  `id_cliente`, `id_tecnico` (casa com `funcionarios.id`), `id_assunto`
+  (tabela `su_oss_assunto`, 26 assuntos), `id_filial`, `data_fechamento`,
+  `protocolo`, `status_pesquisa_satisfacao`, `ultima_atualizacao`.
+  Volume: ~1.500 O.S. fechadas, ~100 em outubro/2026; todas com técnico.
+- **Clientes**: tabela `cliente` (campos `razao`, `fone`, `telefone_celular`,
+  `whatsapp`, `email`, `ativo`).
+- **Filial**: o ID da filial não foi exigido nas listagens; as O.S. vêm de
+  3 filiais e podem ser filtradas por `id_filial`.
+- **Webhook**: não encontrado; seguir com consulta periódica por
+  `data_fechamento`/`ultima_atualizacao`.
+- **Atenção de segurança**: o usuário de teste lê campos sensíveis que o
+  SinalPlus não precisa (salário e dados bancários em `funcionarios`, senhas
+  de NFS-e em `filial`, `senha` em `cliente`). Em produção, o grupo da API
+  deve ter só as permissões da seção 6 e o conector deve descartar tudo que
+  não for usado.
+
+### SGP — funcionando (reteste em 22/10/2026)
+
+O primeiro teste deu 403 porque o par token/app estava errado; com o App
+`sinalplus` e o token novo a autenticação passou. A URL de teste é a de um
+SGP real (não o `demo.sgp.net.br`).
+
+- **Autenticação**: `POST` com `token` e `app` como campos de formulário
+  (`application/x-www-form-urlencoded`) ou no corpo JSON. `GET` responde
+  `405`. Sem os campos: "As credenciais de autenticação não foram
+  fornecidas"; par errado: `403 "Credenciais de autenticação incorretas."`.
+- **O.S. concluídas — usar `POST /api/ura/ordemservico/list/`**, não o
+  `/api/os/list/`:
+  - Resposta `{"paginacao":{"offset","limit","parcial","total"},"ordens_servicos":[...]}`,
+    ordenada por `id` decrescente.
+  - Filtros que funcionam: `status=1` (encerradas; `0` = abertas; o texto
+    `Encerrada` dá erro 500), `data_finalizacao_inicio` /
+    `data_finalizacao_fim` e `data_cadastro_inicio` / `data_cadastro_fim`
+    (`AAAA-MM-DD`), `offset` e `limit` (padrão e máximo 1000; `5000` dá 400).
+  - Campos úteis: `id`, `status` / `status_id`, `data_finalizacao` +
+    `hora_finalizacao` (separadas), `motivo` (ex.: Corretiva, Instalação de
+    KIT, Preventiva), `tipo` (Externa/Interna), `ocorrencia`, `contrato`
+    (id), `cliente` (só o nome), `responsavel`, `tecnicos_auxiliares`
+    (lista de strings), `usuario`, `usuario_finalizacao`, `pop`.
+  - Volume no provedor de teste: 2.301 O.S. (2.211 encerradas), 8
+    finalizadas entre 01 e 21/10/2026, histórico desde 10/2024.
+- **`POST /api/os/list/`** só devolve O.S. **abertas** (90 no teste):
+  `status`, datas e paginação são ignorados; aceita `status_id`,
+  `cliente_id` e `contrato`. Serve para o app do técnico, não para a
+  sincronização.
+- **Colaboradores**: `POST /api/ura/tecnicos/` existe e devolve
+  `[{"id","username","nome"}]` (20 técnicos, sem e-mail, telefone nem flag
+  de ativo). Quem sai do SGP some da lista, então "desativar quem saiu"
+  funciona por ausência.
+- **Vínculo O.S. → técnico** (atenção, não há id numérico):
+  - `tecnicos_auxiliares` e `usuario_finalizacao` trazem o `username`.
+  - `responsavel` traz o **`nome`** do técnico (6 de 8 casaram por nome, 1
+    por username) e vem vazio em ~metade das O.S. encerradas.
+  - Regra sugerida para o conector: técnico = `responsavel` (casando por
+    `nome` e, se não achar, por `username`); se vazio, usar
+    `usuario_finalizacao`; auxiliares entram pelo `username`. Guardar o
+    `id` de `/api/ura/tecnicos/` como `idExternoERP`.
+- **Contato do cliente** para enviar a pesquisa: a O.S. só tem o nome do
+  cliente e o `contrato`. `POST /api/ura/clientes/` com `contrato=<id>`
+  devolve o cliente (`contatos.celulares`, `contatos.emails`,
+  `contatos.telefones`); paginação por `offset`/`limit` (padrão 100).
+- **Webhook**: não encontrado; seguir com consulta periódica por
+  `data_finalizacao_inicio` (ou pelo maior `id` já importado).
+- **Atenção de segurança**: `/api/os/list/` devolve senha do Wi-Fi, senha
+  PPPoE (`servico_password`, `wan_password`) e dados de ONU, e
+  `/api/ura/clientes/` devolve `contratoCentralSenha`. O conector deve usar
+  `/api/ura/ordemservico/list/` e descartar tudo o que não for usado, sem
+  nunca gravar esses campos nem colocá-los em log.
+- O `demo.sgp.net.br` e o `bookstack.sgp.net.br` continuam bloqueados pela
+  rede do ambiente de nuvem; os endpoints acima foram achados testando no
+  SGP real.
+
 ## 3. Comparativo rápido (o que já dá pra concluir)
 
 | Aspecto | IXC | SGP |
@@ -161,8 +256,8 @@ para esclarecer dúvidas de implementação direto com a TSMX.
 | Autenticação | Token (mecanismo exato não confirmado publicamente) | Basic, Token, ou CPF/CNPJ+senha (para cliente final) |
 | Sandbox/homologação | Não identificado publicamente | Sim — `demo.sgp.net.br`, com dados fictícios |
 | Documentação centralizada de endpoints | Dispersa em wiki (menu), sem corpo de página capturável publicamente | Coleção Postman dedicada (mais fácil de explorar) |
-| Endpoints de O.S. confirmados | Não (módulo "Suporte" existe, endpoints não confirmados) | Sim: `GET /api/os/list/`, `PUT /api/os/update/id/{id}/` |
-| Endpoints de colaboradores/equipe confirmados | Não | Não confirmado — endpoints encontrados são voltados ao cliente final/URA |
+| Endpoints de O.S. confirmados | Sim: tabela `su_oss_chamado` (ver 2.1) | Sim: `POST /api/ura/ordemservico/list/` (ver 2.1) |
+| Endpoints de colaboradores/equipe confirmados | Sim: tabela `funcionarios` | Sim: `POST /api/ura/tecnicos/` (id, username, nome) |
 | Webhooks nativos | Não identificado | Não identificado |
 | Suporte ao desenvolvedor | Não identificado um canal direto | E-mail e WhatsApp dedicados (`desenvolvimento@sgp.net.br`) |
 
