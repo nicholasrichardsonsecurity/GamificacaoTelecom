@@ -154,6 +154,59 @@ para esclarecer dúvidas de implementação direto com a TSMX.
 
 ---
 
+## 2.1 Validação com acessos de teste (22/10/2026)
+
+Testes somente leitura, feitos do ambiente de nuvem com as variáveis
+`IXC_TESTE_*` e `SGP_TESTE_*` (seção 6). Nenhum dado pessoal foi guardado.
+
+### IXC (GigaNetPe) — funcionando
+
+- **Autenticação**: `Authorization: Basic base64(<token>)`, em que o token
+  já vem no formato `<id>:<hash>` gerado pelo IXC. O `<id>` do token **não**
+  é o ID do usuário da API, então o conector deve usar o token inteiro.
+- **Listagem**: `POST <URL>/webservice/v1/<tabela>` com o header
+  `ixcsoft: listar` e corpo JSON
+  `{"qtype":"<tabela>.<campo>","query":"...","oper":"=|>|>=|<|like","page":"1","rp":"<qtd>","sortname":"<tabela>.<campo>","sortorder":"asc|desc"}`.
+  A resposta é `{"page","total","registros":[...]}` com todos os valores
+  como string (content-type `text/x-json`).
+- **Colaboradores**: tabela `funcionarios` existe e é acessível (campos úteis:
+  `id`, `funcionario` (nome), `email`, `fone_celular`, `ativo` (`S`/`N`),
+  `data_demissao`, `filial_id`, `id_departamento`, `id_funcao`). Na
+  GigaNetPe: 7 funcionários, 6 com e-mail. Também há `usuarios` (logins do
+  sistema).
+- **O.S. concluídas**: tabela `su_oss_chamado`, `status = "F"` (outros vistos:
+  `A`, `AG`, `EX`). Filtro por data funciona com
+  `qtype=su_oss_chamado.data_fechamento`, `oper=">="`. Campos úteis: `id`,
+  `id_cliente`, `id_tecnico` (casa com `funcionarios.id`), `id_assunto`
+  (tabela `su_oss_assunto`, 26 assuntos), `id_filial`, `data_fechamento`,
+  `protocolo`, `status_pesquisa_satisfacao`, `ultima_atualizacao`.
+  Volume: ~1.500 O.S. fechadas, ~100 em outubro/2026; todas com técnico.
+- **Clientes**: tabela `cliente` (campos `razao`, `fone`, `telefone_celular`,
+  `whatsapp`, `email`, `ativo`).
+- **Filial**: o ID da filial não foi exigido nas listagens; as O.S. vêm de
+  3 filiais e podem ser filtradas por `id_filial`.
+- **Webhook**: não encontrado; seguir com consulta periódica por
+  `data_fechamento`/`ultima_atualizacao`.
+- **Atenção de segurança**: o usuário de teste lê campos sensíveis que o
+  SinalPlus não precisa (salário e dados bancários em `funcionarios`, senhas
+  de NFS-e em `filial`, `senha` em `cliente`). Em produção, o grupo da API
+  deve ter só as permissões da seção 6 e o conector deve descartar tudo que
+  não for usado.
+
+### SGP — ainda não autenticou
+
+- A URL de teste configurada é a de um SGP real (não o `demo.sgp.net.br`).
+- `POST /api/ura/clientes/` e `POST /api/os/list/` com `token` e `app` no
+  corpo (form, multipart, JSON ou querystring) respondem
+  `403 {"detail":"Credenciais de autenticação incorretas."}`. Sem os campos,
+  a resposta é "As credenciais de autenticação não foram fornecidas", ou
+  seja, o formato está certo e o par token/app é que foi recusado.
+- O `demo.sgp.net.br` e o `bookstack.sgp.net.br` estão bloqueados pela rede
+  do ambiente de nuvem.
+- Próximo passo: conferir no painel do SGP (Administração > Integrações >
+  Tokens) se o token está ativo e o nome exato do App, ou liberar o
+  `demo.sgp.net.br` para testar com `demo`/`demo`.
+
 ## 3. Comparativo rápido (o que já dá pra concluir)
 
 | Aspecto | IXC | SGP |
